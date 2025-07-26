@@ -1,0 +1,193 @@
+package commands
+
+import (
+	"database/sql"
+	"encoding/hex"
+	"fmt"
+	"net/url"
+	"strconv"
+
+	"github.com/bwmarrin/discordgo"
+	"github.com/gagliardetto/solana-go"
+	"github.com/ivypowered/ivy-sprite-bot/constants"
+	"github.com/ivypowered/ivy-sprite-bot/util"
+)
+
+func getWithdrawUrl(withdrawId, discordId, discordName, signature string) string {
+	return fmt.Sprintf(
+		"https://sprite.ivypowered.com/withdraw?withdraw_id=%s&user_id=%s&name=%s&authority=%s&signature=%s",
+		withdrawId,
+		discordId,
+		url.QueryEscape(discordName),
+		constants.WITHDRAW_AUTHORITY_B58,
+		signature,
+	)
+}
+
+func WithdrawCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
+	if m.GuildID != "" {
+		util.DmError(s, m.Author.ID, "Withdrawals can only be processed in DMs for security. Please send this command directly to me.")
+		return
+	}
+
+	if len(args) == 0 || args[0] != "list" && len(args) != 2 {
+		util.DmUsage(s, m.Author.ID, "$withdraw <amount> <user> OR $withdraw list", "Withdraw coins from your account or list past withdrawals. Must be used in DMs.")
+		return
+	}
+
+	if args[0] == "list" {
+		listWithdrawals(db, s, m)
+		return
+	}
+
+	amount, err := strconv.ParseFloat(args[0], 64)
+	if err != nil || amount <= 0 {
+		util.DmError(s, m.Author.ID, "Please enter a valid positive amount")
+		return
+	}
+
+	// Convert to RAW
+	amountRaw := uint64(amount * IVY_DECIMALS)
+
+	userKey, err := solana.PublicKeyFromBase58(args[1])
+	if err != nil {
+		util.DmError(s, m.Author.ID, "Please enter a valid base58-encoded Solana address")
+	}
+
+	ensureUserExists(db, m.Author.ID)
+
+	balanceRaw, err := getUserBalanceRaw(db, m.Author.ID)
+	if err != nil {
+		util.DmError(s, m.Author.ID, "Error checking balance")
+		return
+	}
+
+	if balanceRaw < amountRaw {
+		balance := float64(balanceRaw) / IVY_DECIMALS
+		util.DmError(s, m.Author.ID, fmt.Sprintf("Insufficient balance. Your balance: **%.9f** IVY", balance))
+		return
+	}
+
+	// Generate withdrawal ID
+	withdrawIDBytes := util.GenerateID(amountRaw)
+	withdrawID := hex.EncodeToString(withdrawIDBytes[:])
+
+	// Sign withdrawal
+	signature := util.SignWithdrawal(constants.SPRITE_VAULT, userKey, withdrawIDBytes, constants.WITHDRAW_AUTHORITY_KEY)
+	signatureHex := hex.EncodeToString(signature[:])
+
+	// Create withdrawal and debit user atomically
+	err = createWithdrawal(db, withdrawID, m.Author.ID, balanceRaw, amountRaw, signatureHex)
+	if err != nil {
+		util.DmError(s, m.Author.ID, fmt.Sprintf("Error processing withdrawal: %v", err))
+		return
+	}
+
+	// Get new balance
+	newBalanceRaw, _ := getUserBalanceRaw(db, m.Author.ID)
+	newBalance := float64(newBalanceRaw) / IVY_DECIMALS
+
+	// Get user info
+	user, err := s.User(m.Author.ID)
+	if err != nil {
+		util.DmError(s, m.Author.ID, "Error getting user info")
+		return
+	}
+
+	// Create withdrawal URL
+	withdrawURL := getWithdrawUrl(
+		withdrawID,
+		m.Author.ID,
+		user.Username,
+		signatureHex,
+	)
+
+	// Send success embed
+	embed := &discordgo.MessageEmbed{
+		Title: "Withdrawal Created",
+		Color: constants.IVY_GREEN,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Amount",
+				Value:  fmt.Sprintf("%.9f IVY", amount),
+				Inline: true,
+			},
+			{
+				Name:   "New Balance",
+				Value:  fmt.Sprintf("%.9f IVY", newBalance),
+				Inline: true,
+			},
+			{
+				Name:   "Withdrawal ID",
+				Value:  fmt.Sprintf("`%s`", withdrawID[:8]+"..."),
+				Inline: false,
+			},
+			{
+				Name:   "Claim Link",
+				Value:  fmt.Sprintf("[Click here to claim withdrawal](%s)", withdrawURL),
+				Inline: false,
+			},
+		},
+	}
+
+	channel, err := s.UserChannelCreate(m.Author.ID)
+	if err != nil {
+		return
+	}
+	s.ChannelMessageSendEmbed(channel.ID, embed)
+}
+
+func listWithdrawals(db *sql.DB, s *discordgo.Session, m *discordgo.MessageCreate) {
+	rows, err := db.Query(
+		"SELECT withdraw_id, amount_raw, signature, timestamp FROM withdrawals WHERE user_id = ? ORDER BY timestamp DESC LIMIT 10",
+		m.Author.ID,
+	)
+	if err != nil {
+		util.DmError(s, m.Author.ID, "Error fetching withdrawals")
+		return
+	}
+	defer rows.Close()
+
+	embed := &discordgo.MessageEmbed{
+		Title:  "Recent Withdrawals",
+		Color:  constants.IVY_GREEN,
+		Fields: []*discordgo.MessageEmbedField{},
+	}
+
+	hasWithdrawals := false
+	for rows.Next() {
+		var withdrawID string
+		var amountRaw uint64
+		var signature string
+		var timestamp int64
+		rows.Scan(&withdrawID, &amountRaw, &signature, &timestamp)
+		hasWithdrawals = true
+
+		amount := float64(amountRaw) / IVY_DECIMALS
+
+		// Get user info for URL
+		user, _ := s.User(m.Author.ID)
+		withdrawURL := getWithdrawUrl(
+			withdrawID,
+			m.Author.ID,
+			user.Username,
+			signature,
+		)
+
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   fmt.Sprintf("%.9f IVY", amount),
+			Value:  fmt.Sprintf("ID: `%s`\n[Claim Link](%s)", withdrawID[:8]+"...", withdrawURL),
+			Inline: false,
+		})
+	}
+
+	if !hasWithdrawals {
+		embed.Description = "No withdrawals found"
+	}
+
+	channel, err := s.UserChannelCreate(m.Author.ID)
+	if err != nil {
+		return
+	}
+	s.ChannelMessageSendEmbed(channel.ID, embed)
+}
