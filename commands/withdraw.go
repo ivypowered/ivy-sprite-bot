@@ -31,7 +31,7 @@ func WithdrawCommand(db *sql.DB, args []string, s *discordgo.Session, m *discord
 	}
 
 	if len(args) == 0 || args[0] != "list" && len(args) != 2 {
-		util.DmUsage(s, m.Author.ID, "$withdraw <amount> <user> OR $withdraw list", "Withdraw coins from your account or list past withdrawals. Must be used in DMs.")
+		util.DmUsage(s, m.Author.ID, "$withdraw amount sol_address OR $withdraw list", "Withdraw coins from your account or list past withdrawals. Must be used in DMs.\nExample: $withdraw 0.5 A32dqo7aTp3eHhxpSA6Cw67zWosKc3ymiYz2DbPVx8BK")
 		return
 	}
 
@@ -52,6 +52,7 @@ func WithdrawCommand(db *sql.DB, args []string, s *discordgo.Session, m *discord
 	userKey, err := solana.PublicKeyFromBase58(args[1])
 	if err != nil {
 		util.DmError(s, m.Author.ID, "Please enter a valid base58-encoded Solana address")
+		return
 	}
 
 	ensureUserExists(db, m.Author.ID)

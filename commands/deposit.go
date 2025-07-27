@@ -14,7 +14,7 @@ import (
 
 func DepositCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	if len(args) == 0 {
-		util.DmUsage(s, m.Author.ID, "$deposit <amount> OR $deposit check <id>", "Create a new deposit or check an existing one")
+		util.DmUsage(s, m.Author.ID, "$deposit amount OR $deposit check id", "Create a new deposit or check an existing one\nExample: $deposit 0.75\nExample: $deposit check 3a8fb7")
 		return
 	}
 

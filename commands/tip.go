@@ -60,7 +60,7 @@ func TipCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.Me
 	err = transferFundsRaw(db, m.Author.ID, recipientID, amountRaw)
 	if err != nil {
 		util.ReactErr(s, m)
-		util.DmError(s, m.Author.ID, "Error processing transfer")
+		util.DmError(s, m.Author.ID, fmt.Sprintf("Error processing transfer: %v", err))
 		return
 	}
 
