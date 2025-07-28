@@ -35,3 +35,15 @@ const IVY_RED = 0xFF5000
 const IVY_PURPLE = 0x800080
 const IVY_YELLOW = 0xFDC700
 const IVY_WHITE = 0xFFFFFF
+
+// Minimum rain amount
+const RAIN_MIN_AMOUNT = 0.01
+
+// Amount of people who have to be active for rain to work
+const RAIN_MIN_ACTIVE_COUNT = 5
+
+// Activity score required to receive rain
+const RAIN_ACTIVITY_REQUIREMENT = 5
+
+// Maximum activity score
+const ACTIVITY_MAX = 10
