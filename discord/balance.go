@@ -1,25 +1,26 @@
-package commands
+// discord/balance.go
+package discord
 
 import (
-	"database/sql"
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/ivypowered/ivy-sprite-bot/constants"
+	"github.com/ivypowered/ivy-sprite-bot/db"
 	"github.com/ivypowered/ivy-sprite-bot/util"
 )
 
-func BalanceCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
-	ensureUserExists(db, m.Author.ID)
+func BalanceCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
+	database.EnsureUserExists(m.Author.ID)
 
-	balanceRaw, err := getUserBalanceRaw(db, m.Author.ID)
+	balanceRaw, err := database.GetUserBalanceRaw(m.Author.ID)
 	if err != nil {
 		util.DmError(s, m.Author.ID, err.Error())
 		return
 	}
 
 	// Convert RAW to display value
-	balance := float64(balanceRaw) / IVY_DECIMALS
+	balance := float64(balanceRaw) / db.IVY_DECIMALS
 
 	// Create the embed for DM
 	name := m.Author.GlobalName

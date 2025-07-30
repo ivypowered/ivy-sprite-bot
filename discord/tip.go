@@ -1,15 +1,19 @@
-package commands
+// discord/tip.go
+package discord
 
 import (
-	"database/sql"
 	"fmt"
 	"regexp"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/ivypowered/ivy-sprite-bot/db"
 	"github.com/ivypowered/ivy-sprite-bot/util"
 )
 
-func TipCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
+var DISCORD_ID_REGEX = regexp.MustCompile(`<@!?(\d+)>`)
+var TELEGRAM_ID_REGEX = regexp.MustCompile(`tg:(\d+)$`)
+
+func TipCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	if len(args) != 2 {
 		util.ReactErr(s, m)
 		util.DmUsage(s, m.Author.ID, "$tip @user <amount>", "Send coins to another user. Mention the user and specify a positive amount.")
@@ -17,14 +21,18 @@ func TipCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.Me
 	}
 
 	// Extract user ID from mention
-	userIDRegex := regexp.MustCompile(`<@!?(\d+)>`)
-	matches := userIDRegex.FindStringSubmatch(args[0])
-	if len(matches) != 2 {
+	discordMatches := DISCORD_ID_REGEX.FindStringSubmatch(args[0])
+	tgMatches := TELEGRAM_ID_REGEX.FindStringSubmatch(args[0])
+	var recipientID string
+	if len(discordMatches) == 2 {
+		recipientID = discordMatches[1]
+	} else if len(tgMatches) == 2 {
+		recipientID = tgMatches[0]
+	} else {
 		util.ReactErr(s, m)
 		util.DmError(s, m.Author.ID, "Please mention a valid user")
 		return
 	}
-	recipientID := matches[1]
 
 	// Parse amount
 	amount, err := util.ParseAmount(args[1])
@@ -35,14 +43,14 @@ func TipCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.Me
 	}
 
 	// Convert to RAW
-	amountRaw := uint64(amount * IVY_DECIMALS)
+	amountRaw := uint64(amount * db.IVY_DECIMALS)
 
 	// Ensure both users exist in database
-	ensureUserExists(db, m.Author.ID)
-	ensureUserExists(db, recipientID)
+	database.EnsureUserExists(m.Author.ID)
+	database.EnsureUserExists(recipientID)
 
 	// Check sender's balance
-	senderBalanceRaw, err := getUserBalanceRaw(db, m.Author.ID)
+	senderBalanceRaw, err := database.GetUserBalanceRaw(m.Author.ID)
 	if err != nil {
 		util.ReactErr(s, m)
 		util.DmError(s, m.Author.ID, "Error checking balance")
@@ -50,14 +58,14 @@ func TipCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.Me
 	}
 
 	if senderBalanceRaw < amountRaw {
-		senderBalance := float64(senderBalanceRaw) / IVY_DECIMALS
+		senderBalance := float64(senderBalanceRaw) / db.IVY_DECIMALS
 		util.ReactErr(s, m)
 		util.DmError(s, m.Author.ID, fmt.Sprintf("Insufficient balance. Your balance: **%.9f** IVY", senderBalance))
 		return
 	}
 
 	// Perform transfer
-	err = transferFundsRaw(db, m.Author.ID, recipientID, amountRaw)
+	err = database.TransferFundsRaw(m.Author.ID, recipientID, amountRaw)
 	if err != nil {
 		util.ReactErr(s, m)
 		util.DmError(s, m.Author.ID, fmt.Sprintf("Error processing transfer: %v", err))
@@ -65,8 +73,8 @@ func TipCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.Me
 	}
 
 	// Get new balances
-	newBalanceRaw, _ := getUserBalanceRaw(db, m.Author.ID)
-	newBalance := float64(newBalanceRaw) / IVY_DECIMALS
+	newBalanceRaw, _ := database.GetUserBalanceRaw(m.Author.ID)
+	newBalance := float64(newBalanceRaw) / db.IVY_DECIMALS
 
 	util.ReactOk(s, m)
 
@@ -77,8 +85,8 @@ func TipCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.Me
 		"")
 
 	// DM recipient notification
-	recipientBalanceRaw, _ := getUserBalanceRaw(db, recipientID)
-	recipientBalance := float64(recipientBalanceRaw) / IVY_DECIMALS
+	recipientBalanceRaw, _ := database.GetUserBalanceRaw(recipientID)
+	recipientBalance := float64(recipientBalanceRaw) / db.IVY_DECIMALS
 	util.DmSuccess(s, recipientID,
 		fmt.Sprintf("You received **%.9f** IVY from <@%s>\n\nYour new balance: **%.9f** IVY", amount, m.Author.ID, recipientBalance),
 		"Payment Received",

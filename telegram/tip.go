@@ -1,0 +1,107 @@
+package telegram
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
+	"github.com/ivypowered/ivy-sprite-bot/db"
+	"github.com/ivypowered/ivy-sprite-bot/util"
+)
+
+func TipCommand(ctx context.Context, database db.Database, b *bot.Bot, msg *models.Message, args []string) {
+	if len(args) < 1 || msg.ReplyToMessage == nil || msg.ReplyToMessage.From == nil {
+		sendUsage(ctx, b, msg.Chat.ID, "/tip", `Send coins to another user
+
+<b>Usage:</b>
+• Reply to a message with /tip [amount]
+
+<b>Examples:</b>
+• /tip 10
+• /tip $5
+
+<b>Note:</b>
+• Due to Telegram API limitations, it is not possible to support username mentions`)
+		return
+	}
+
+	// Tip via reply
+	recipientID := getDatabaseID(msg.ReplyToMessage.From.ID)
+	recipientName := msg.ReplyToMessage.From.FirstName
+	if msg.ReplyToMessage.From.Username != "" {
+		recipientName = "@" + msg.ReplyToMessage.From.Username
+	}
+
+	// Get amount
+	amount, err := util.ParseAmount(args[0])
+
+	// Validate amount
+	if err != nil || amount <= 0 {
+		sendError(ctx, b, msg.Chat.ID, "Please enter a valid positive amount")
+		return
+	}
+
+	// Convert to RAW
+	amountRaw := uint64(amount * db.IVY_DECIMALS)
+	senderID := getDatabaseID(msg.From.ID)
+
+	// Don't allow tipping yourself
+	if senderID == recipientID {
+		sendError(ctx, b, msg.Chat.ID, "You cannot tip yourself!")
+		return
+	}
+
+	// Ensure both users exist in database
+	database.EnsureUserExists(senderID)
+	database.EnsureUserExists(recipientID)
+
+	// Check sender's balance
+	senderBalanceRaw, err := database.GetUserBalanceRaw(senderID)
+	if err != nil {
+		sendError(ctx, b, msg.Chat.ID, "Error checking balance")
+		return
+	}
+
+	if senderBalanceRaw < amountRaw {
+		senderBalance := float64(senderBalanceRaw) / db.IVY_DECIMALS
+		sendError(ctx, b, msg.Chat.ID, fmt.Sprintf("Insufficient balance. Your balance: <b>%.9f</b> IVY", senderBalance))
+		return
+	}
+
+	// Perform transfer
+	err = database.TransferFundsRaw(senderID, recipientID, amountRaw)
+	if err != nil {
+		sendError(ctx, b, msg.Chat.ID, fmt.Sprintf("Error processing transfer: %v", err))
+		return
+	}
+
+	// Get new balances
+	newBalanceRaw, _ := database.GetUserBalanceRaw(senderID)
+	newBalance := float64(newBalanceRaw) / db.IVY_DECIMALS
+
+	// Send success message
+	sendSuccess(ctx, b, msg.Chat.ID,
+		fmt.Sprintf("Successfully sent <b>%.9f IVY</b> to %s\n\nYour new balance: <b>%.9f IVY</b>",
+			amount, escapeHTML(recipientName), newBalance),
+		"✅ Transfer Complete")
+
+	recipientBalanceRaw, _ := database.GetUserBalanceRaw(recipientID)
+	recipientBalance := float64(recipientBalanceRaw) / db.IVY_DECIMALS
+
+	senderName := msg.From.FirstName
+	if msg.From.Username != "" {
+		senderName = "@" + msg.From.Username
+	}
+
+	b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: msg.ReplyToMessage.From.ID,
+		Text: fmt.Sprintf(`💸 <b>Payment Received</b>
+
+You received <b>%.9f IVY</b> from %s
+
+💰 Your new balance: <b>%.9f IVY</b>`,
+			amount, escapeHTML(senderName), recipientBalance),
+		ParseMode: models.ParseModeHTML,
+	})
+}

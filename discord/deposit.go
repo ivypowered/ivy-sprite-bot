@@ -1,4 +1,5 @@
-package commands
+// discord/deposit.go
+package discord
 
 import (
 	"database/sql"
@@ -9,10 +10,11 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/ivypowered/ivy-sprite-bot/constants"
+	"github.com/ivypowered/ivy-sprite-bot/db"
 	"github.com/ivypowered/ivy-sprite-bot/util"
 )
 
-func DepositCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
+func DepositCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	if len(args) == 0 {
 		util.DmUsage(s, m.Author.ID, "$deposit amount OR $deposit check id", "Create a new deposit or check an existing one\nExample: $deposit 0.75\nExample: $deposit check 3a8fb7")
 		return
@@ -24,12 +26,12 @@ func DepositCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordg
 			util.DmUsage(s, m.Author.ID, "$deposit check <deposit_id>", "Check the status of a pending deposit")
 			return
 		}
-		checkDeposit(db, args[1], s, m)
+		checkDeposit(database, args[1], s, m)
 		return
 	}
 
 	if args[0] == "list" {
-		listDeposits(db, s, m)
+		listDeposits(database, s, m)
 		return
 	}
 
@@ -41,16 +43,16 @@ func DepositCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordg
 	}
 
 	// Convert to RAW
-	amountRaw := uint64(amount * IVY_DECIMALS)
+	amountRaw := uint64(amount * db.IVY_DECIMALS)
 
-	ensureUserExists(db, m.Author.ID)
+	database.EnsureUserExists(m.Author.ID)
 
 	// Generate deposit ID
 	depositIDBytes := util.GenerateID(amountRaw)
 	depositID := hex.EncodeToString(depositIDBytes[:])
 
 	// Create deposit record
-	err = createDeposit(db, depositID, m.Author.ID, amountRaw)
+	err = database.CreateDeposit(depositID, m.Author.ID, amountRaw)
 	if err != nil {
 		util.DmError(s, m.Author.ID, "Error creating deposit")
 		return
@@ -106,17 +108,15 @@ func DepositCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordg
 	s.ChannelMessageSendEmbed(channel.ID, embed)
 }
 
-func checkDeposit(db *sql.DB, depositIDPrefix string, s *discordgo.Session, m *discordgo.MessageCreate) {
-	// Find matching deposit
+func checkDeposit(database db.Database, depositIDPrefix string, s *discordgo.Session, m *discordgo.MessageCreate) {
+	// Find matching deposit - need to access inner DB for this query
 	var fullDepositID string
 	var amountRaw uint64
 	var completed int
 	// If there's duplicate deposits, we select the latest one!
-	err := db.QueryRow(
-		"SELECT deposit_id, amount_raw, completed FROM deposits WHERE user_id = ? AND deposit_id LIKE ? ORDER BY timestamp DESC LIMIT 1",
-		m.Author.ID,
-		depositIDPrefix+"%",
-	).Scan(&fullDepositID, &amountRaw, &completed)
+	// Note: This requires exposing the inner DB or adding a method to Database
+	// For now, let's add a method to Database for this specific query
+	fullDepositID, amountRaw, completed, err := database.FindDepositByPrefix(m.Author.ID, depositIDPrefix)
 
 	if err == sql.ErrNoRows {
 		util.DmError(s, m.Author.ID, "No deposit found with that ID")
@@ -153,7 +153,7 @@ func checkDeposit(db *sql.DB, depositIDPrefix string, s *discordgo.Session, m *d
 	}
 
 	// Complete the deposit
-	err = completeDeposit(db, fullDepositID)
+	err = database.CompleteDeposit(fullDepositID)
 	if err != nil {
 		util.ReactErr(s, m)
 		util.DmError(s, m.Author.ID, "Error completing deposit")
@@ -161,9 +161,9 @@ func checkDeposit(db *sql.DB, depositIDPrefix string, s *discordgo.Session, m *d
 	}
 
 	// Get new balance
-	newBalanceRaw, _ := getUserBalanceRaw(db, m.Author.ID)
-	newBalance := float64(newBalanceRaw) / IVY_DECIMALS
-	amount := float64(amountRaw) / IVY_DECIMALS
+	newBalanceRaw, _ := database.GetUserBalanceRaw(m.Author.ID)
+	newBalance := float64(newBalanceRaw) / db.IVY_DECIMALS
+	amount := float64(amountRaw) / db.IVY_DECIMALS
 
 	util.DmSuccess(s, m.Author.ID,
 		fmt.Sprintf("Deposited `%.9f IVY`\nNew balance: `%.9f IVY`", amount, newBalance),
@@ -171,17 +171,14 @@ func checkDeposit(db *sql.DB, depositIDPrefix string, s *discordgo.Session, m *d
 		"")
 }
 
-func listDeposits(db *sql.DB, s *discordgo.Session, m *discordgo.MessageCreate) {
-	rows, err := db.Query(
-		"SELECT deposit_id, amount_raw, completed, timestamp FROM deposits WHERE user_id = ? ORDER BY timestamp DESC LIMIT 10",
-		m.Author.ID,
-	)
+func listDeposits(database db.Database, s *discordgo.Session, m *discordgo.MessageCreate) {
+	// This requires adding a method to Database for listing deposits
+	deposits, err := database.ListDeposits(m.Author.ID, 10)
 	if err != nil {
 		util.ReactErr(s, m)
 		util.DmError(s, m.Author.ID, "Error fetching deposits")
 		return
 	}
-	defer rows.Close()
 
 	embed := &discordgo.MessageEmbed{
 		Title:  "Recent Deposits",
@@ -189,39 +186,31 @@ func listDeposits(db *sql.DB, s *discordgo.Session, m *discordgo.MessageCreate) 
 		Fields: []*discordgo.MessageEmbedField{},
 	}
 
-	hasDeposits := false
-	for rows.Next() {
-		var depositID string
-		var amountRaw uint64
-		var completed int
-		var timestamp int64
-		rows.Scan(&depositID, &amountRaw, &completed, &timestamp)
-		hasDeposits = true
-
-		amount := float64(amountRaw) / IVY_DECIMALS
-		status := "❌ Pending"
-		if completed == 1 {
-			status = "✅ Complete"
-		}
-
-		// Get user info for URL
-		user, _ := s.User(m.Author.ID)
-		depositURL := fmt.Sprintf(
-			"https://sprite.ivypowered.com/deposit?deposit_id=%s&user_id=%s&name=%s",
-			depositID,
-			m.Author.ID,
-			url.QueryEscape(user.Username),
-		)
-
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   fmt.Sprintf("%s %.9f IVY", status, amount),
-			Value:  fmt.Sprintf("ID: `%s`\n[Deposit Link](%s)", depositID[:8]+"...", depositURL),
-			Inline: false,
-		})
-	}
-
-	if !hasDeposits {
+	if len(deposits) == 0 {
 		embed.Description = "No deposits found"
+	} else {
+		for _, deposit := range deposits {
+			amount := float64(deposit.AmountRaw) / db.IVY_DECIMALS
+			status := "❌ Pending"
+			if deposit.Completed {
+				status = "✅ Complete"
+			}
+
+			// Get user info for URL
+			user, _ := s.User(m.Author.ID)
+			depositURL := fmt.Sprintf(
+				"https://sprite.ivypowered.com/deposit?deposit_id=%s&user_id=%s&name=%s",
+				deposit.DepositID,
+				m.Author.ID,
+				url.QueryEscape(user.Username),
+			)
+
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+				Name:   fmt.Sprintf("%s %.9f IVY", status, amount),
+				Value:  fmt.Sprintf("ID: `%s`\n[Deposit Link](%s)", deposit.DepositID[:8]+"...", depositURL),
+				Inline: false,
+			})
+		}
 	}
 
 	util.ReactOk(s, m)

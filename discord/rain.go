@@ -1,20 +1,20 @@
-// commands/rain.go
-package commands
+// discord/rain.go
+package discord
 
 import (
-	"database/sql"
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/ivypowered/ivy-sprite-bot/constants"
+	"github.com/ivypowered/ivy-sprite-bot/db"
 	"github.com/ivypowered/ivy-sprite-bot/util"
 )
 
-func RainCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
+func RainCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Check how many people would receive the rain
 	if len(args) == 2 && args[0] == "check" {
 		server := args[1]
-		activeUsers, err := getActiveUsersForRain(db, server, constants.RAIN_ACTIVITY_REQUIREMENT)
+		activeUsers, err := database.GetActiveUsersForRain(server, constants.RAIN_ACTIVITY_REQUIREMENT)
 		if err != nil {
 			util.ReactErr(s, m)
 			util.DmError(s, m.Author.ID, err.Error())
@@ -54,13 +54,13 @@ func RainCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.M
 	}
 
 	// Convert to RAW
-	amountRaw := uint64(amount * IVY_DECIMALS)
+	amountRaw := uint64(amount * db.IVY_DECIMALS)
 
 	// Ensure sender exists in database
-	ensureUserExists(db, m.Author.ID)
+	database.EnsureUserExists(m.Author.ID)
 
 	// Check sender's balance
-	senderBalanceRaw, err := getUserBalanceRaw(db, m.Author.ID)
+	senderBalanceRaw, err := database.GetUserBalanceRaw(m.Author.ID)
 	if err != nil {
 		util.ReactErr(s, m)
 		util.DmError(s, m.Author.ID, "Error checking balance")
@@ -68,14 +68,14 @@ func RainCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.M
 	}
 
 	if senderBalanceRaw < amountRaw {
-		senderBalance := float64(senderBalanceRaw) / IVY_DECIMALS
+		senderBalance := float64(senderBalanceRaw) / db.IVY_DECIMALS
 		util.ReactErr(s, m)
 		util.DmError(s, m.Author.ID, fmt.Sprintf("Insufficient balance. Your balance: **%.9f** IVY", senderBalance))
 		return
 	}
 
 	// Get active users for this server
-	activeUsers, err := getActiveUsersForRain(db, m.GuildID, constants.RAIN_ACTIVITY_REQUIREMENT)
+	activeUsers, err := database.GetActiveUsersForRain(m.GuildID, constants.RAIN_ACTIVITY_REQUIREMENT)
 	if err != nil {
 		util.ReactErr(s, m)
 		util.DmError(s, m.Author.ID, "Error finding active users")
@@ -97,7 +97,7 @@ func RainCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.M
 	}
 
 	// Process the rain transaction
-	amountPerUserRaw, err := processRain(db, m.Author.ID, eligibleUsers, amountRaw, senderBalanceRaw)
+	amountPerUserRaw, err := database.ProcessRain(m.Author.ID, eligibleUsers, amountRaw, senderBalanceRaw)
 	if err != nil {
 		util.ReactErr(s, m)
 		util.DmError(s, m.Author.ID, fmt.Sprintf("Error processing rain: %v", err))
@@ -105,9 +105,9 @@ func RainCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.M
 	}
 
 	// Get new balances for notifications
-	newBalanceRaw, _ := getUserBalanceRaw(db, m.Author.ID)
-	newBalance := float64(newBalanceRaw) / IVY_DECIMALS
-	amountPerUser := float64(amountPerUserRaw) / IVY_DECIMALS
+	newBalanceRaw, _ := database.GetUserBalanceRaw(m.Author.ID)
+	newBalance := float64(newBalanceRaw) / db.IVY_DECIMALS
+	amountPerUser := float64(amountPerUserRaw) / db.IVY_DECIMALS
 
 	util.ReactOk(s, m)
 
@@ -130,8 +130,8 @@ func RainCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.M
 
 	// DM each recipient
 	for _, recipientID := range eligibleUsers {
-		recipientBalanceRaw, _ := getUserBalanceRaw(db, recipientID)
-		recipientBalance := float64(recipientBalanceRaw) / IVY_DECIMALS
+		recipientBalanceRaw, _ := database.GetUserBalanceRaw(recipientID)
+		recipientBalance := float64(recipientBalanceRaw) / db.IVY_DECIMALS
 		util.DmSuccess(s, recipientID,
 			fmt.Sprintf("You received **%.9f** IVY from <@%s>'s rain!\n\nYour new balance: **%.9f** IVY",
 				amountPerUser, m.Author.ID, recipientBalance),

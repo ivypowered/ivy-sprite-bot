@@ -1,13 +1,12 @@
-package commands
+package discord
 
 import (
-	"database/sql"
-
 	"github.com/bwmarrin/discordgo"
 	"github.com/ivypowered/ivy-sprite-bot/constants"
+	"github.com/ivypowered/ivy-sprite-bot/db"
 )
 
-func HelpCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
+func HelpCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Create help embed for DM
 	embed := &discordgo.MessageEmbed{
 		Title: "Commands",

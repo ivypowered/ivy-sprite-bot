@@ -1,7 +1,7 @@
-package commands
+// discord/withdraw.go
+package discord
 
 import (
-	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"net/url"
@@ -10,6 +10,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/gagliardetto/solana-go"
 	"github.com/ivypowered/ivy-sprite-bot/constants"
+	"github.com/ivypowered/ivy-sprite-bot/db"
 	"github.com/ivypowered/ivy-sprite-bot/util"
 )
 
@@ -24,7 +25,7 @@ func getWithdrawUrl(withdrawId, discordId, discordName, signature string) string
 	)
 }
 
-func WithdrawCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
+func WithdrawCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.GuildID != "" {
 		util.DmError(s, m.Author.ID, "Withdrawals can only be processed in DMs for security. Please send this command directly to me.")
 		return
@@ -36,7 +37,7 @@ func WithdrawCommand(db *sql.DB, args []string, s *discordgo.Session, m *discord
 	}
 
 	if args[0] == "list" {
-		listWithdrawals(db, s, m)
+		listWithdrawals(database, s, m)
 		return
 	}
 
@@ -47,7 +48,7 @@ func WithdrawCommand(db *sql.DB, args []string, s *discordgo.Session, m *discord
 	}
 
 	// Convert to RAW
-	amountRaw := uint64(amount * IVY_DECIMALS)
+	amountRaw := uint64(amount * db.IVY_DECIMALS)
 
 	userKey, err := solana.PublicKeyFromBase58(args[1])
 	if err != nil {
@@ -55,16 +56,16 @@ func WithdrawCommand(db *sql.DB, args []string, s *discordgo.Session, m *discord
 		return
 	}
 
-	ensureUserExists(db, m.Author.ID)
+	database.EnsureUserExists(m.Author.ID)
 
-	balanceRaw, err := getUserBalanceRaw(db, m.Author.ID)
+	balanceRaw, err := database.GetUserBalanceRaw(m.Author.ID)
 	if err != nil {
 		util.DmError(s, m.Author.ID, "Error checking balance")
 		return
 	}
 
 	if balanceRaw < amountRaw {
-		balance := float64(balanceRaw) / IVY_DECIMALS
+		balance := float64(balanceRaw) / db.IVY_DECIMALS
 		util.DmError(s, m.Author.ID, fmt.Sprintf("Insufficient balance. Your balance: **%.9f** IVY", balance))
 		return
 	}
@@ -78,15 +79,15 @@ func WithdrawCommand(db *sql.DB, args []string, s *discordgo.Session, m *discord
 	signatureHex := hex.EncodeToString(signature[:])
 
 	// Create withdrawal and debit user atomically
-	err = createWithdrawal(db, withdrawID, m.Author.ID, balanceRaw, amountRaw, signatureHex)
+	err = database.CreateWithdrawal(withdrawID, m.Author.ID, balanceRaw, amountRaw, signatureHex)
 	if err != nil {
 		util.DmError(s, m.Author.ID, fmt.Sprintf("Error processing withdrawal: %v", err))
 		return
 	}
 
 	// Get new balance
-	newBalanceRaw, _ := getUserBalanceRaw(db, m.Author.ID)
-	newBalance := float64(newBalanceRaw) / IVY_DECIMALS
+	newBalanceRaw, _ := database.GetUserBalanceRaw(m.Author.ID)
+	newBalance := float64(newBalanceRaw) / db.IVY_DECIMALS
 
 	// Get user info
 	user, err := s.User(m.Author.ID)
@@ -138,16 +139,13 @@ func WithdrawCommand(db *sql.DB, args []string, s *discordgo.Session, m *discord
 	s.ChannelMessageSendEmbed(channel.ID, embed)
 }
 
-func listWithdrawals(db *sql.DB, s *discordgo.Session, m *discordgo.MessageCreate) {
-	rows, err := db.Query(
-		"SELECT withdraw_id, amount_raw, signature, timestamp FROM withdrawals WHERE user_id = ? ORDER BY timestamp DESC LIMIT 10",
-		m.Author.ID,
-	)
+func listWithdrawals(database db.Database, s *discordgo.Session, m *discordgo.MessageCreate) {
+	// This requires adding a method to Database for listing withdrawals
+	withdrawals, err := database.ListWithdrawals(m.Author.ID, 10)
 	if err != nil {
 		util.DmError(s, m.Author.ID, "Error fetching withdrawals")
 		return
 	}
-	defer rows.Close()
 
 	embed := &discordgo.MessageEmbed{
 		Title:  "Recent Withdrawals",
@@ -155,35 +153,27 @@ func listWithdrawals(db *sql.DB, s *discordgo.Session, m *discordgo.MessageCreat
 		Fields: []*discordgo.MessageEmbedField{},
 	}
 
-	hasWithdrawals := false
-	for rows.Next() {
-		var withdrawID string
-		var amountRaw uint64
-		var signature string
-		var timestamp int64
-		rows.Scan(&withdrawID, &amountRaw, &signature, &timestamp)
-		hasWithdrawals = true
-
-		amount := float64(amountRaw) / IVY_DECIMALS
-
-		// Get user info for URL
-		user, _ := s.User(m.Author.ID)
-		withdrawURL := getWithdrawUrl(
-			withdrawID,
-			m.Author.ID,
-			user.Username,
-			signature,
-		)
-
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   fmt.Sprintf("%.9f IVY", amount),
-			Value:  fmt.Sprintf("ID: `%s`\n[Claim Link](%s)", withdrawID[:8]+"...", withdrawURL),
-			Inline: false,
-		})
-	}
-
-	if !hasWithdrawals {
+	if len(withdrawals) == 0 {
 		embed.Description = "No withdrawals found"
+	} else {
+		for _, withdrawal := range withdrawals {
+			amount := float64(withdrawal.AmountRaw) / db.IVY_DECIMALS
+
+			// Get user info for URL
+			user, _ := s.User(m.Author.ID)
+			withdrawURL := getWithdrawUrl(
+				withdrawal.WithdrawID,
+				m.Author.ID,
+				user.Username,
+				withdrawal.Signature,
+			)
+
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+				Name:   fmt.Sprintf("%.9f IVY", amount),
+				Value:  fmt.Sprintf("ID: `%s`\n[Claim Link](%s)", withdrawal.WithdrawID[:8]+"...", withdrawURL),
+				Inline: false,
+			})
+		}
 	}
 
 	channel, err := s.UserChannelCreate(m.Author.ID)
