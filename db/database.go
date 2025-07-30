@@ -108,6 +108,17 @@ func (db Database) GetUserBalanceRaw(userID string) (uint64, error) {
 	return balance, err
 }
 
+func (db Database) IsUserExtant(userID string) (bool, error) {
+	_, err := db.GetUserBalanceRaw(userID)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (db Database) UpdateBalanceRaw(userID string, amountRaw int64) error {
 	res, err := db.inner.Exec("UPDATE users SET balance_raw = balance_raw + ? WHERE user_id = ?", amountRaw, userID)
 	if err != nil {

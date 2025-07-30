@@ -26,8 +26,22 @@ func TipCommand(database db.Database, args []string, s *discordgo.Session, m *di
 	var recipientID string
 	if len(discordMatches) == 2 {
 		recipientID = discordMatches[1]
+		// Ensure Discord user exists
+		database.EnsureUserExists(recipientID)
 	} else if len(tgMatches) == 2 {
 		recipientID = tgMatches[0]
+		// Don't ensure TG user exists, because it might be wrong
+		extant, err := database.IsUserExtant(recipientID)
+		if err != nil {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, fmt.Sprintf("Error querying db: %v", err))
+			return
+		}
+		if !extant {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, fmt.Sprintf("Telegram user %s not found, make sure they have run /balance at least once", recipientID))
+			return
+		}
 	} else {
 		util.ReactErr(s, m)
 		util.DmError(s, m.Author.ID, "Please mention a valid user")
@@ -45,9 +59,8 @@ func TipCommand(database db.Database, args []string, s *discordgo.Session, m *di
 	// Convert to RAW
 	amountRaw := uint64(amount * db.IVY_DECIMALS)
 
-	// Ensure both users exist in database
+	// Ensure author exists in database
 	database.EnsureUserExists(m.Author.ID)
-	database.EnsureUserExists(recipientID)
 
 	// Check sender's balance
 	senderBalanceRaw, err := database.GetUserBalanceRaw(m.Author.ID)
