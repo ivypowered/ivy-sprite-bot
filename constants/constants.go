@@ -43,7 +43,7 @@ const RAIN_MIN_AMOUNT = 0.01
 const RAIN_MIN_ACTIVE_COUNT = 5
 
 // Activity score required to receive rain
-const RAIN_ACTIVITY_REQUIREMENT = 3
+const RAIN_ACTIVITY_REQUIREMENT = 5
 
 // Maximum activity score
 const ACTIVITY_MAX = 10

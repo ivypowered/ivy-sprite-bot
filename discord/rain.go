@@ -3,12 +3,18 @@ package discord
 
 import (
 	"fmt"
+	"math"
+	"strconv"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/ivypowered/ivy-sprite-bot/constants"
 	"github.com/ivypowered/ivy-sprite-bot/db"
 	"github.com/ivypowered/ivy-sprite-bot/util"
 )
+
+const RAIN_USAGE_NAME string = "$rain amount OR $rain amount max=10"
+const RAIN_USAGE_DETAILS string = "Rain coins on active users in this server. Active users are those with an activity score of 5 or higher."
 
 func RainCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Check how many people would receive the rain
@@ -32,10 +38,23 @@ func RainCommand(database db.Database, args []string, s *discordgo.Session, m *d
 		return
 	}
 
-	if len(args) != 1 {
+	if len(args) < 1 {
 		util.ReactErr(s, m)
-		util.DmUsage(s, m.Author.ID, "$rain amount", "Rain coins on active users in this server. Active users are those with an activity score of 5 or higher.")
+		util.DmUsage(s, m.Author.ID, RAIN_USAGE_NAME, RAIN_USAGE_DETAILS)
 		return
+	}
+
+	var maxUsers int = math.MaxInt
+	if len(args) >= 2 {
+		maxp := args[1]
+		if strings.HasPrefix(maxp, "max=") {
+			var err error
+			maxUsers, err = strconv.Atoi(maxp[4:])
+			if err != nil || maxUsers < 0 {
+				util.ReactErr(s, m)
+				util.DmUsage(s, m.Author.ID, RAIN_USAGE_NAME, RAIN_USAGE_DETAILS)
+			}
+		}
 	}
 
 	// Parse amount
@@ -94,6 +113,11 @@ func RainCommand(database db.Database, args []string, s *discordgo.Session, m *d
 		util.ReactErr(s, m)
 		util.DmError(s, m.Author.ID, fmt.Sprintf("No active users found in this server. Users need an activity score of %d+ to receive rain.", constants.RAIN_ACTIVITY_REQUIREMENT))
 		return
+	}
+
+	// Bound by maximum users
+	if len(eligibleUsers) > maxUsers {
+		eligibleUsers = eligibleUsers[:maxUsers]
 	}
 
 	// Process the rain transaction
