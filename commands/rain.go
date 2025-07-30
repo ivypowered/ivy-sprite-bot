@@ -11,6 +11,20 @@ import (
 )
 
 func RainCommand(db *sql.DB, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
+	// Check how many people would receive the rain
+	if len(args) == 2 && args[0] == "check" {
+		server := args[1]
+		activeUsers, err := getActiveUsersForRain(db, server, constants.RAIN_ACTIVITY_REQUIREMENT)
+		if err != nil {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, err.Error())
+			return
+		}
+		util.ReactOk(s, m)
+		util.DmSuccess(s, m.Author.ID, fmt.Sprintf("Active users for %s: **%d**", server, len(activeUsers)), "Rain information", "")
+		return
+	}
+
 	// Rain only works in guild channels
 	if m.GuildID == "" {
 		util.ReactErr(s, m)

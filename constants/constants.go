@@ -43,7 +43,16 @@ const RAIN_MIN_AMOUNT = 0.01
 const RAIN_MIN_ACTIVE_COUNT = 5
 
 // Activity score required to receive rain
-const RAIN_ACTIVITY_REQUIREMENT = 5
+const RAIN_ACTIVITY_REQUIREMENT = 3
 
 // Maximum activity score
 const ACTIVITY_MAX = 10
+
+// Minimum time between messages to increase score
+const ACTIVITY_DELTA_MIN = 90
+
+// Maximum time between messages to increase score
+const ACTIVITY_DELTA_MAX = 2400
+
+// After this time has passed between messages, activity is reset
+const ACTIVITY_DELTA_RESET = 3600

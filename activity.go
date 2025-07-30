@@ -35,16 +35,16 @@ func updateActivityScore(db *sql.DB, serverID, userID string) error {
 	delta := currentTime - lastTimestamp
 
 	var newScore int
-	if delta <= 90 {
+	if delta < constants.ACTIVITY_DELTA_MIN {
 		// Less than 90 seconds - don't change score
 		newScore = score
-	} else if delta > 90 && delta <= 1200 {
+	} else if delta >= constants.ACTIVITY_DELTA_MIN && delta <= constants.ACTIVITY_DELTA_MAX {
 		// Between 90 seconds and 20 minutes - increase score (max 10)
 		newScore = score + 1
 		if newScore > constants.ACTIVITY_MAX {
 			newScore = constants.ACTIVITY_MAX
 		}
-	} else if delta > 1200 && delta <= 1800 {
+	} else if delta > constants.ACTIVITY_DELTA_MAX && delta <= constants.ACTIVITY_DELTA_RESET {
 		// Between 20 and 30 minutes - decrease score (min 1)
 		newScore = score - 1
 		if newScore < 1 {

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/ivypowered/ivy-sprite-bot/constants"
 )
 
 const IVY_DECIMALS = 1e9
@@ -225,7 +227,7 @@ func processRain(db *sql.DB, senderID string, recipientIDs []string, totalAmount
 // getActiveUsersForRain returns user IDs with activity score >= minScore for a given server
 func getActiveUsersForRain(db *sql.DB, serverID string, minScore int) ([]string, error) {
 	// prune activity entries that are too old
-	threshold := time.Now().Unix() - 1800
+	threshold := time.Now().Unix() - constants.ACTIVITY_DELTA_RESET
 	_, err := db.Exec(
 		"DELETE FROM activity WHERE last_message_timestamp < ?",
 		threshold,
