@@ -27,6 +27,20 @@ Rain Usage:
 • $rain amount max=[amount] - Rain on up to [amount] active users`
 
 func RainCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
+	// Handle check command
+	if len(args) == 2 && args[0] == "check" {
+		server := args[1]
+		activeUsers, err := database.GetActiveUsersForRain(server, constants.RAIN_ACTIVITY_REQUIREMENT)
+		if err != nil {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, err.Error())
+			return
+		}
+		util.ReactOk(s, m)
+		util.DmSuccess(s, m.Author.ID, fmt.Sprintf("Active users for %s: **%d**", server, len(activeUsers)), "Rain information", "")
+		return
+	}
+
 	// Rain only works in guild channels
 	if m.GuildID == "" {
 		util.ReactErr(s, m)
@@ -43,20 +57,6 @@ func RainCommand(database db.Database, args []string, s *discordgo.Session, m *d
 	// Handle channel management subcommands
 	if args[0] == "channels" {
 		handleRainChannels(database, args[1:], s, m)
-		return
-	}
-
-	// Handle check command
-	if len(args) == 2 && args[0] == "check" {
-		server := args[1]
-		activeUsers, err := database.GetActiveUsersForRain(server, constants.RAIN_ACTIVITY_REQUIREMENT)
-		if err != nil {
-			util.ReactErr(s, m)
-			util.DmError(s, m.Author.ID, err.Error())
-			return
-		}
-		util.ReactOk(s, m)
-		util.DmSuccess(s, m.Author.ID, fmt.Sprintf("Active users for %s: **%d**", server, len(activeUsers)), "Rain information", "")
 		return
 	}
 
@@ -205,52 +205,70 @@ func handleRainChannels(database db.Database, args []string, s *discordgo.Sessio
 
 	switch args[0] {
 	case "add":
-		if len(args) < 2 {
+		if len(args) != 2 {
 			util.ReactErr(s, m)
-			util.DmError(s, m.Author.ID, "Please mention at least one channel to add")
+			util.DmError(s, m.Author.ID, "Please mention exactly one channel to add")
+			return
+		}
+		// Check if user is violet
+		if m.Author.ID != "1348921951493554277" {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, "For now only violet can change these variables")
 			return
 		}
 
-		added := 0
-		for _, mention := range args[1:] {
-			// Parse channel mention
-			channelID := strings.TrimPrefix(strings.TrimSuffix(mention, ">"), "<#")
+		// Parse channel mention
+		channelID := strings.TrimPrefix(strings.TrimSuffix(args[1], ">"), "<#")
 
-			// Verify channel exists in this guild
-			channel, err := s.Channel(channelID)
-			if err != nil || channel.GuildID != m.GuildID {
-				continue
-			}
+		// Verify channel exists in this guild
+		channel, err := s.Channel(channelID)
+		if err != nil || channel.GuildID != m.GuildID {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, "Invalid channel or channel not found in this server")
+			return
+		}
 
-			err = database.AddRainChannel(m.GuildID, channelID)
-			if err == nil {
-				added++
-			}
+		if channel.Type != discordgo.ChannelTypeGuildText {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, "Only text channels can be added to rain whitelist")
+			return
+		}
+
+		err = database.AddRainChannel(m.GuildID, channelID)
+		if err != nil {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, "Failed to add channel to rain whitelist")
+			return
 		}
 
 		util.ReactOk(s, m)
-		util.DmSuccess(s, m.Author.ID, fmt.Sprintf("Added **%d** channel(s) to rain whitelist", added), "Channels Added", "")
+		util.DmSuccess(s, m.Author.ID, fmt.Sprintf("Added <#%s> to rain whitelist", channelID), "Channel Added", "")
 
 	case "remove":
-		if len(args) < 2 {
+		if len(args) != 2 {
 			util.ReactErr(s, m)
-			util.DmError(s, m.Author.ID, "Please mention at least one channel to remove")
+			util.DmError(s, m.Author.ID, "Please mention exactly one channel to remove")
+			return
+		}
+		// Check if user is violet
+		if m.Author.ID != "1348921951493554277" {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, "For now only violet can change these variables")
 			return
 		}
 
-		removed := 0
-		for _, mention := range args[1:] {
-			// Parse channel mention
-			channelID := strings.TrimPrefix(strings.TrimSuffix(mention, ">"), "<#")
+		// Parse channel mention
+		channelID := strings.TrimPrefix(strings.TrimSuffix(args[1], ">"), "<#")
 
-			err := database.RemoveRainChannel(m.GuildID, channelID)
-			if err == nil {
-				removed++
-			}
+		err := database.RemoveRainChannel(m.GuildID, channelID)
+		if err != nil {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, "Failed to remove channel from rain whitelist")
+			return
 		}
 
 		util.ReactOk(s, m)
-		util.DmSuccess(s, m.Author.ID, fmt.Sprintf("Removed **%d** channel(s) from rain whitelist", removed), "Channels Removed", "")
+		util.DmSuccess(s, m.Author.ID, fmt.Sprintf("Removed <#%s> from rain whitelist", channelID), "Channel Removed", "")
 
 	case "list":
 		channels, err := database.GetRainChannels(m.GuildID)
@@ -275,6 +293,12 @@ func handleRainChannels(database db.Database, args []string, s *discordgo.Sessio
 		util.DmSuccess(s, m.Author.ID, channelList, "Rain Channels", fmt.Sprintf("Total: %d channels", len(channels)))
 
 	case "clear":
+		// Check if user is violet
+		if m.Author.ID != "1348921951493554277" {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, "For now only violet can change these variables")
+			return
+		}
 		err := database.ClearRainChannels(m.GuildID)
 		if err != nil {
 			util.ReactErr(s, m)

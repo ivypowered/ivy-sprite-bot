@@ -76,32 +76,42 @@ func TipCommand(ctx context.Context, database db.Database, b *bot.Bot, msg *mode
 		return
 	}
 
-	// Get new balances
-	newBalanceRaw, _ := database.GetUserBalanceRaw(senderID)
-	newBalance := float64(newBalanceRaw) / db.IVY_DECIMALS
-
-	// Send success message
-	sendSuccess(ctx, b, msg.Chat.ID,
-		fmt.Sprintf("Successfully sent <b>%.9f IVY</b> to %s\n\nYour new balance: <b>%.9f IVY</b>",
-			amount, escapeHTML(recipientName), newBalance),
-		"✅ Transfer Complete")
-
-	recipientBalanceRaw, _ := database.GetUserBalanceRaw(recipientID)
-	recipientBalance := float64(recipientBalanceRaw) / db.IVY_DECIMALS
-
+	// Get sender name for notifications
 	senderName := msg.From.FirstName
 	if msg.From.Username != "" {
 		senderName = "@" + msg.From.Username
 	}
 
+	// Send brief public acknowledgment (reply to the tip message)
+	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID:    msg.Chat.ID,
+		Text:      fmt.Sprintf("🌿 %s tipped %.9f IVY to %s", escapeHTML(senderName), amount, escapeHTML(recipientName)),
+		ParseMode: models.ParseModeHTML,
+		ReplyParameters: &models.ReplyParameters{
+			MessageID: msg.ID,
+		},
+	})
+	if err != nil {
+		// Fallback to non-reply if reply fails
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:    msg.Chat.ID,
+			Text:      fmt.Sprintf("🌿 %s tipped %.9f IVY to %s", escapeHTML(senderName), amount, escapeHTML(recipientName)),
+			ParseMode: models.ParseModeHTML,
+		})
+	}
+
+	// Send notification to recipient via DM
+	recipientBalanceRaw, _ := database.GetUserBalanceRaw(recipientID)
+	recipientBalance := float64(recipientBalanceRaw) / db.IVY_DECIMALS
+
 	b.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID: msg.ReplyToMessage.From.ID,
-		Text: fmt.Sprintf(`💸 <b>Payment Received</b>
+		Text: fmt.Sprintf(`<b>You received a tip!</b>
 
-You received <b>%.9f IVY</b> from %s
+%s sent you <b>%.9f IVY</b>
 
-💰 Your new balance: <b>%.9f IVY</b>`,
-			amount, escapeHTML(senderName), recipientBalance),
+🌿 Your new balance: <b>%.9f IVY</b>`,
+			escapeHTML(senderName), amount, recipientBalance),
 		ParseMode: models.ParseModeHTML,
 	})
 }
