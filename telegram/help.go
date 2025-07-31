@@ -30,7 +30,10 @@ func HelpCommand(ctx context.Context, b *bot.Bot, msg *models.Message) {
 • /help - Show this help message
 
 💳 <b>ID</b>
-• /id - Show your Ivy Sprite ID, to transfer IVY from Discord to Telegram
+• /id - Show the ID for this account, to transfer IVY from Discord to Telegram
+
+🔄 <b>Move</b> <i>(Private chat only)</i>
+• /move [amount] [discord_id] - Move funds to Discord
 
 📝 <b>Examples:</b>
 • /deposit 10.5

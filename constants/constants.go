@@ -52,7 +52,7 @@ const ACTIVITY_MAX = 10
 const ACTIVITY_DELTA_MIN = 90
 
 // Maximum time between messages to increase score
-const ACTIVITY_DELTA_MAX = 2400
+const ACTIVITY_DELTA_MAX = 1200
 
 // After this time has passed between messages, activity is reset
-const ACTIVITY_DELTA_RESET = 3600
+const ACTIVITY_DELTA_RESET = 1800

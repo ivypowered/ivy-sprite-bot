@@ -90,7 +90,7 @@ func DepositCommand(ctx context.Context, database db.Database, b *bot.Bot, msg *
 	)
 
 	// Send success message
-	text := fmt.Sprintf(`✅ <b>Deposit Created</b>
+	text := fmt.Sprintf(`⤵ <b>Deposit Created</b>
 
 🌿 <b>Amount:</b> %.9f IVY
 🔖 <b>Deposit ID:</b> <code>%s</code>

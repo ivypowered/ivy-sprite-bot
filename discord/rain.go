@@ -13,24 +13,20 @@ import (
 	"github.com/ivypowered/ivy-sprite-bot/util"
 )
 
-const RAIN_USAGE_NAME string = "$rain amount OR $rain amount max=10"
-const RAIN_USAGE_DETAILS string = "Rain coins on active users in this server. Active users are those with an activity score of 5 or higher."
+const RAIN_USAGE_NAME string = "$rain amount OR $rain channels [add|remove|list|clear]"
+const RAIN_USAGE_DETAILS string = `Rain coins on active users in whitelisted channels.
+
+Channel Management:
+• $rain channels add #channel1 #channel2 - Add channels to whitelist
+• $rain channels remove #channel1 - Remove channels from whitelist
+• $rain channels list - Show whitelisted channels
+• $rain channels clear - Clear all whitelisted channels
+
+Rain Usage:
+• $rain amount - Rain on active users (requires whitelisted channels)
+• $rain amount max=[amount] - Rain on up to [amount] active users`
 
 func RainCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
-	// Check how many people would receive the rain
-	if len(args) == 2 && args[0] == "check" {
-		server := args[1]
-		activeUsers, err := database.GetActiveUsersForRain(server, constants.RAIN_ACTIVITY_REQUIREMENT)
-		if err != nil {
-			util.ReactErr(s, m)
-			util.DmError(s, m.Author.ID, err.Error())
-			return
-		}
-		util.ReactOk(s, m)
-		util.DmSuccess(s, m.Author.ID, fmt.Sprintf("Active users for %s: **%d**", server, len(activeUsers)), "Rain information", "")
-		return
-	}
-
 	// Rain only works in guild channels
 	if m.GuildID == "" {
 		util.ReactErr(s, m)
@@ -44,6 +40,41 @@ func RainCommand(database db.Database, args []string, s *discordgo.Session, m *d
 		return
 	}
 
+	// Handle channel management subcommands
+	if args[0] == "channels" {
+		handleRainChannels(database, args[1:], s, m)
+		return
+	}
+
+	// Handle check command
+	if len(args) == 2 && args[0] == "check" {
+		server := args[1]
+		activeUsers, err := database.GetActiveUsersForRain(server, constants.RAIN_ACTIVITY_REQUIREMENT)
+		if err != nil {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, err.Error())
+			return
+		}
+		util.ReactOk(s, m)
+		util.DmSuccess(s, m.Author.ID, fmt.Sprintf("Active users for %s: **%d**", server, len(activeUsers)), "Rain information", "")
+		return
+	}
+
+	// Check if any channels are whitelisted
+	rainChannels, err := database.GetRainChannels(m.GuildID)
+	if err != nil {
+		util.ReactErr(s, m)
+		util.DmError(s, m.Author.ID, "Error checking rain channels")
+		return
+	}
+
+	if len(rainChannels) == 0 {
+		util.ReactErr(s, m)
+		util.DmError(s, m.Author.ID, "No channels are whitelisted for rain. Use `$rain channels add #channel` to add channels.")
+		return
+	}
+
+	// Parse max users parameter
 	var maxUsers int = math.MaxInt
 	if len(args) >= 2 {
 		maxp := args[1]
@@ -53,6 +84,7 @@ func RainCommand(database db.Database, args []string, s *discordgo.Session, m *d
 			if err != nil || maxUsers < 0 {
 				util.ReactErr(s, m)
 				util.DmUsage(s, m.Author.ID, RAIN_USAGE_NAME, RAIN_USAGE_DETAILS)
+				return
 			}
 		}
 	}
@@ -111,7 +143,7 @@ func RainCommand(database db.Database, args []string, s *discordgo.Session, m *d
 
 	if len(eligibleUsers) == 0 {
 		util.ReactErr(s, m)
-		util.DmError(s, m.Author.ID, fmt.Sprintf("No active users found in this server. Users need an activity score of %d+ to receive rain.", constants.RAIN_ACTIVITY_REQUIREMENT))
+		util.DmError(s, m.Author.ID, fmt.Sprintf("No active users found in whitelisted channels. Users need an activity score of %d+ in whitelisted channels to receive rain.", constants.RAIN_ACTIVITY_REQUIREMENT))
 		return
 	}
 
@@ -161,5 +193,100 @@ func RainCommand(database db.Database, args []string, s *discordgo.Session, m *d
 				amountPerUser, m.Author.ID, recipientBalance),
 			"Rain Received",
 			"")
+	}
+}
+
+func handleRainChannels(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
+	if len(args) == 0 {
+		util.ReactErr(s, m)
+		util.DmUsage(s, m.Author.ID, RAIN_USAGE_NAME, RAIN_USAGE_DETAILS)
+		return
+	}
+
+	switch args[0] {
+	case "add":
+		if len(args) < 2 {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, "Please mention at least one channel to add")
+			return
+		}
+
+		added := 0
+		for _, mention := range args[1:] {
+			// Parse channel mention
+			channelID := strings.TrimPrefix(strings.TrimSuffix(mention, ">"), "<#")
+
+			// Verify channel exists in this guild
+			channel, err := s.Channel(channelID)
+			if err != nil || channel.GuildID != m.GuildID {
+				continue
+			}
+
+			err = database.AddRainChannel(m.GuildID, channelID)
+			if err == nil {
+				added++
+			}
+		}
+
+		util.ReactOk(s, m)
+		util.DmSuccess(s, m.Author.ID, fmt.Sprintf("Added **%d** channel(s) to rain whitelist", added), "Channels Added", "")
+
+	case "remove":
+		if len(args) < 2 {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, "Please mention at least one channel to remove")
+			return
+		}
+
+		removed := 0
+		for _, mention := range args[1:] {
+			// Parse channel mention
+			channelID := strings.TrimPrefix(strings.TrimSuffix(mention, ">"), "<#")
+
+			err := database.RemoveRainChannel(m.GuildID, channelID)
+			if err == nil {
+				removed++
+			}
+		}
+
+		util.ReactOk(s, m)
+		util.DmSuccess(s, m.Author.ID, fmt.Sprintf("Removed **%d** channel(s) from rain whitelist", removed), "Channels Removed", "")
+
+	case "list":
+		channels, err := database.GetRainChannels(m.GuildID)
+		if err != nil {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, "Error retrieving channel list")
+			return
+		}
+
+		if len(channels) == 0 {
+			util.ReactOk(s, m)
+			util.DmSuccess(s, m.Author.ID, "No channels are currently whitelisted for rain", "Rain Channels", "")
+			return
+		}
+
+		channelList := ""
+		for _, channelID := range channels {
+			channelList += fmt.Sprintf("• <#%s>\n", channelID)
+		}
+
+		util.ReactOk(s, m)
+		util.DmSuccess(s, m.Author.ID, channelList, "Rain Channels", fmt.Sprintf("Total: %d channels", len(channels)))
+
+	case "clear":
+		err := database.ClearRainChannels(m.GuildID)
+		if err != nil {
+			util.ReactErr(s, m)
+			util.DmError(s, m.Author.ID, "Error clearing channel list")
+			return
+		}
+
+		util.ReactOk(s, m)
+		util.DmSuccess(s, m.Author.ID, "All channels have been removed from the rain whitelist", "Channels Cleared", "")
+
+	default:
+		util.ReactErr(s, m)
+		util.DmUsage(s, m.Author.ID, RAIN_USAGE_NAME, RAIN_USAGE_DETAILS)
 	}
 }

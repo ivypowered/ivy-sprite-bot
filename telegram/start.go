@@ -58,6 +58,8 @@ func Start(database db.Database, token string) (func() error, error) {
 		switch command {
 		case "start", "help":
 			HelpCommand(ctx, b, msg)
+		case "move":
+			MoveCommand(ctx, database, b, msg, args)
 		case "id":
 			IdCommand(ctx, b, msg)
 		case "balance":
@@ -91,6 +93,7 @@ func Start(database db.Database, token string) (func() error, error) {
 			{Command: "tip", Description: "Tip Ivy tokens to another user"},
 			{Command: "id", Description: "See your Ivy Sprite ID"},
 			{Command: "help", Description: "Show available commands"},
+			{Command: "move", Description: "Move funds to Discord (Private chat only)"},
 		},
 	})
 	if err != nil {

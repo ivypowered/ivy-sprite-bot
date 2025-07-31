@@ -106,7 +106,7 @@ func WithdrawCommand(database db.Database, args []string, s *discordgo.Session, 
 
 	// Send success embed
 	embed := &discordgo.MessageEmbed{
-		Title: "Withdrawal Created",
+		Title: "\U00002934 Withdrawal Created",
 		Color: constants.IVY_GREEN,
 		Fields: []*discordgo.MessageEmbedField{
 			{

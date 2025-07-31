@@ -33,6 +33,11 @@ func HelpCommand(database db.Database, args []string, s *discordgo.Session, m *d
 				Inline: false,
 			},
 			{
+				Name:   "ID",
+				Value:  "`$id` - Show your Discord ID for receiving transfers from Telegram",
+				Inline: false,
+			},
+			{
 				Name:   "Help",
 				Value:  "`$help` - Show this help message",
 				Inline: false,

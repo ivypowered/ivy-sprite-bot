@@ -115,7 +115,7 @@ func WithdrawCommand(ctx context.Context, database db.Database, b *bot.Bot, msg 
 	)
 
 	// Send success message
-	text := fmt.Sprintf(`✅ <b>Withdrawal Created</b>
+	text := fmt.Sprintf(`⤴ <b>Withdrawal Created</b>
 
 🌿 <b>Amount:</b> %.9f IVY
 💳 <b>New Balance:</b> %.9f IVY
@@ -130,10 +130,14 @@ func WithdrawCommand(ctx context.Context, database db.Database, b *bot.Bot, msg 
 		withdrawID[:8]+"...",
 		withdrawURL)
 
+	isDisabled := true
 	b.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID:    msg.Chat.ID,
 		Text:      text,
 		ParseMode: models.ParseModeHTML,
+		LinkPreviewOptions: &models.LinkPreviewOptions{
+			IsDisabled: &isDisabled,
+		},
 	})
 }
 

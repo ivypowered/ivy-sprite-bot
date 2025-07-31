@@ -32,6 +32,7 @@ func Start(db db.Database, token string) (func() error, error) {
 		"balance":  BalanceCommand,
 		"deposit":  DepositCommand,
 		"help":     HelpCommand,
+		"id":       IdCommand,
 		"rain":     RainCommand,
 		"tip":      TipCommand,
 		"withdraw": WithdrawCommand,
@@ -46,11 +47,18 @@ func Start(db db.Database, token string) (func() error, error) {
 
 		content := strings.TrimSpace(m.Content)
 
-		// Check if message starts with $
+		// If it's not a bot command
 		if !strings.HasPrefix(content, "$") {
 			// Only track activity in guild channels (not DMs)
-			if m.GuildID != "" {
-				// Update activity score for this user
+			if m.GuildID == "" {
+				return
+			}
+			// Check if this channel is whitelisted for rain
+			isRainChannel, err := db.IsRainChannel(m.GuildID, m.ChannelID)
+			if err != nil {
+				log.Printf("Error checking rain channel: %v", err)
+			} else if isRainChannel {
+				// Update activity score only for whitelisted channels
 				err := db.UpdateActivityScore(m.GuildID, m.Author.ID)
 				if err != nil {
 					log.Printf("Error updating activity score: %v", err)

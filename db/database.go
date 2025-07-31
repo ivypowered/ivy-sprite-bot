@@ -86,6 +86,11 @@ func (db Database) initTables() error {
 			PRIMARY KEY (server_id, user_id)
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_activity_server ON activity(server_id);`,
+		`CREATE TABLE IF NOT EXISTS rain_channels (
+            server_id TEXT NOT NULL,
+            channel_id TEXT NOT NULL,
+            PRIMARY KEY (server_id, channel_id)
+        );`,
 	}
 
 	for _, query := range queries {
@@ -472,4 +477,63 @@ func (db *Database) ListWithdrawals(userID string, limit int) ([]Withdrawal, err
 	}
 
 	return withdrawals, rows.Err()
+}
+
+// AddRainChannel adds a channel to the rain whitelist for a server
+func (db Database) AddRainChannel(serverID, channelID string) error {
+	_, err := db.inner.Exec(
+		"INSERT OR IGNORE INTO rain_channels (server_id, channel_id) VALUES (?, ?)",
+		serverID, channelID,
+	)
+	return err
+}
+
+// RemoveRainChannel removes a channel from the rain whitelist
+func (db Database) RemoveRainChannel(serverID, channelID string) error {
+	_, err := db.inner.Exec(
+		"DELETE FROM rain_channels WHERE server_id = ? AND channel_id = ?",
+		serverID, channelID,
+	)
+	return err
+}
+
+// ClearRainChannels removes all rain channels for a server
+func (db Database) ClearRainChannels(serverID string) error {
+	_, err := db.inner.Exec(
+		"DELETE FROM rain_channels WHERE server_id = ?",
+		serverID,
+	)
+	return err
+}
+
+// GetRainChannels returns all whitelisted channels for a server
+func (db Database) GetRainChannels(serverID string) ([]string, error) {
+	rows, err := db.inner.Query(
+		"SELECT channel_id FROM rain_channels WHERE server_id = ?",
+		serverID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var channels []string
+	for rows.Next() {
+		var channelID string
+		if err := rows.Scan(&channelID); err != nil {
+			return nil, err
+		}
+		channels = append(channels, channelID)
+	}
+	return channels, rows.Err()
+}
+
+// IsRainChannel checks if a channel is whitelisted for rain
+func (db Database) IsRainChannel(serverID, channelID string) (bool, error) {
+	var count int
+	err := db.inner.QueryRow(
+		"SELECT COUNT(*) FROM rain_channels WHERE server_id = ? AND channel_id = ?",
+		serverID, channelID,
+	).Scan(&count)
+	return count > 0, err
 }
