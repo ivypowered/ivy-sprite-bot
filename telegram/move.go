@@ -42,24 +42,24 @@ func MoveCommand(ctx context.Context, database db.Database, b *bot.Bot, msg *mod
 
 	// Parse Discord ID
 	discordID := args[1]
-	_, err = strconv.ParseUint(discordID, 10, 64)
+	discordIDint, err := strconv.ParseUint(discordID, 10, 64)
 	if err != nil {
 		sendError(ctx, b, msg.Chat.ID, "Please enter a valid Discord ID (numbers only)")
 		return
 	}
+	discordID = strconv.FormatUint(discordIDint, 10)
 
 	// Convert to RAW
 	amountRaw := uint64(amount * db.IVY_DECIMALS)
 
 	// Get user IDs
 	telegramID := getDatabaseID(msg.From.ID)
-	discordUserID := fmt.Sprintf("discord:%s", discordID)
 
 	// Ensure Telegram user exists
 	database.EnsureUserExists(telegramID)
 
 	// Check if Discord user exists
-	discordExists, err := database.IsUserExtant(discordUserID)
+	discordExists, err := database.IsUserExtant(discordID)
 	if err != nil {
 		sendError(ctx, b, msg.Chat.ID, "Error checking Discord account")
 		return
@@ -84,7 +84,7 @@ func MoveCommand(ctx context.Context, database db.Database, b *bot.Bot, msg *mod
 	}
 
 	// Perform transfer
-	err = database.TransferFundsRaw(telegramID, discordUserID, amountRaw)
+	err = database.TransferFundsRaw(telegramID, discordID, amountRaw)
 	if err != nil {
 		sendError(ctx, b, msg.Chat.ID, fmt.Sprintf("Error processing transfer: %v", err))
 		return
