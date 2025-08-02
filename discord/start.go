@@ -35,6 +35,7 @@ func Start(db db.Database, token string) (func() error, error) {
 		"id":       IdCommand,
 		"rain":     RainCommand,
 		"tip":      TipCommand,
+		"link":     LinkCommand,
 		"withdraw": WithdrawCommand,
 	}
 
