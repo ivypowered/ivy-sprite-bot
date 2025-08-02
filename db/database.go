@@ -4,6 +4,8 @@ package db
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ivypowered/ivy-sprite-bot/constants"
@@ -89,6 +91,12 @@ func (db Database) initTables() error {
             channel_id TEXT NOT NULL,
             PRIMARY KEY (server_id, channel_id)
         );`,
+		`CREATE TABLE IF NOT EXISTS wallets (
+            wallet TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            linked_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+        );`,
+		`CREATE INDEX IF NOT EXISTS idx_wallet_user ON wallets(user_id);`,
 	}
 
 	for _, query := range queries {
@@ -533,4 +541,95 @@ func (db Database) IsRainChannel(serverID, channelID string) (bool, error) {
 		serverID, channelID,
 	).Scan(&count)
 	return count > 0, err
+}
+
+// LinkWallet links a wallet address to a user
+func (db Database) LinkWallet(wallet string, userID string) error {
+	// Link the wallet
+	_, err := db.inner.Exec(
+		"INSERT OR REPLACE INTO wallets (wallet, user_id) VALUES (?, ?)",
+		wallet, userID,
+	)
+	return err
+}
+
+// GetUserWallets returns all wallets linked to a user
+func (db Database) GetUserWallets(userID string) ([]string, error) {
+	rows, err := db.inner.Query(
+		"SELECT wallet FROM wallets WHERE user_id = ? ORDER BY linked_at DESC",
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var wallets []string
+	for rows.Next() {
+		var wallet string
+		if err := rows.Scan(&wallet); err != nil {
+			return nil, err
+		}
+		wallets = append(wallets, wallet)
+	}
+
+	return wallets, rows.Err()
+}
+
+// UnlinkWallet removes a wallet link
+func (db Database) UnlinkWallet(wallet string, userID string) error {
+	result, err := db.inner.Exec(
+		"DELETE FROM wallets WHERE wallet = ? AND user_id = ?",
+		wallet, userID,
+	)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return errors.New("wallet not found or not linked to your account")
+	}
+
+	return nil
+}
+
+// GetWalletToUserMap efficiently maps multiple wallet addresses to their user IDs
+func (db Database) GetWalletToUserMap(wallets []string) (map[string]string, error) {
+	if len(wallets) == 0 {
+		return make(map[string]string), nil
+	}
+
+	// Build placeholders for SQL IN clause
+	placeholders := make([]string, len(wallets))
+	args := make([]interface{}, len(wallets))
+	for i, wallet := range wallets {
+		placeholders[i] = "?"
+		args[i] = wallet
+	}
+
+	query := fmt.Sprintf(
+		"SELECT wallet, user_id FROM wallets WHERE wallet IN (%s)",
+		strings.Join(placeholders, ","),
+	)
+
+	rows, err := db.inner.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]string)
+	for rows.Next() {
+		var wallet, userID string
+		if err := rows.Scan(&wallet, &userID); err != nil {
+			return nil, err
+		}
+		result[wallet] = userID
+	}
+
+	return result, rows.Err()
 }

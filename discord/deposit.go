@@ -15,6 +15,12 @@ import (
 )
 
 func DepositCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
+	if m.GuildID != "" {
+		ReactErr(s, m)
+		DmError(s, m.Author.ID, "Withdrawals can only be processed in DMs for security. Please send this command directly to me.")
+		return
+	}
+
 	if len(args) == 0 {
 		DmUsage(s, m.Author.ID, "$deposit amount OR $deposit check id", "Create a new deposit or check an existing one\nExample: $deposit 0.75\nExample: $deposit check 3a8fb7")
 		return

@@ -18,6 +18,11 @@ func HelpCommand(database db.Database, args []string, s *discordgo.Session, m *d
 				Inline: false,
 			},
 			{
+				Name:   "Tip",
+				Value:  "`$tip @user <amount>` - Send coins to another user",
+				Inline: false,
+			},
+			{
 				Name:   "Deposit",
 				Value:  "`$deposit <amount>` - Create a new deposit\n`$deposit check <id>` - Check deposit status\n`$deposit list` - List recent deposits",
 				Inline: false,
@@ -28,13 +33,13 @@ func HelpCommand(database db.Database, args []string, s *discordgo.Session, m *d
 				Inline: false,
 			},
 			{
-				Name:   "Tip",
-				Value:  "`$tip @user <amount>` - Send coins to another user",
+				Name:   "ID",
+				Value:  "`$id` - Show your Discord ID for receiving transfers from Telegram",
 				Inline: false,
 			},
 			{
-				Name:   "ID",
-				Value:  "`$id` - Show your Discord ID for receiving transfers from Telegram",
+				Name:   "Link",
+				Value:  "`$link <wallet>` - Link a Solana wallet\n`$link complete <response>` - Complete wallet linking\n`$link list` - List linked wallets\n`$link remove <wallet>` - Remove a linked wallet",
 				Inline: false,
 			},
 			{

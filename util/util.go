@@ -6,9 +6,11 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
@@ -24,6 +26,26 @@ func GenerateID(amountRaw uint64) [32]byte {
 	}
 	binary.LittleEndian.PutUint64(id[24:], amountRaw)
 	return id
+}
+
+// Create a URL for a wallet link request
+func LinkGenerateURL(wallet [32]byte, id string) string {
+	return fmt.Sprintf(
+		"https://sprite.ivypowered.com/link?wallet=%s&id=%s&timestamp=%d",
+		solana.PublicKey(wallet).String(), id, time.Now().Unix(),
+	)
+}
+
+// Verify the wallet linking, returning the user if successful
+func LinkVerify(response [104]byte, id string) ([32]byte, error) {
+	wallet := solana.PublicKey(response[0:32])
+	signature := solana.Signature(response[32:96])
+	timestamp := binary.LittleEndian.Uint64(response[96:])
+	msg := fmt.Sprintf("Link wallet %s to ivy-sprite user %s at %d", wallet.String(), id, timestamp)
+	if !signature.Verify(wallet, []byte(msg)) {
+		return [32]byte{}, errors.New("invalid signature for wallet linking")
+	}
+	return wallet, nil
 }
 
 // Sign a withdrawal message using ed25519

@@ -27,6 +27,7 @@ func getWithdrawUrl(withdrawId, discordId, discordName, signature string) string
 
 func WithdrawCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.GuildID != "" {
+		ReactErr(s, m)
 		DmError(s, m.Author.ID, "Withdrawals can only be processed in DMs for security. Please send this command directly to me.")
 		return
 	}
