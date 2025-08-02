@@ -26,6 +26,11 @@ func HelpCommand(ctx context.Context, b *bot.Bot, msg *models.Message) {
 💸 <b>Tip</b>
 • Reply to a message with /tip [amount] - Send coins to user
 
+🌧 <b>Rain</b> <i>(Ivy channel only)</i>
+• /rain [amount] - Rain coins on active users
+• /rain [amount] max=[users] - Rain on limited users
+• /rain check - Check eligible users (DM only)
+
 ℹ️ <b>Help</b>
 • /help - Show this help message
 
@@ -38,7 +43,8 @@ func HelpCommand(ctx context.Context, b *bot.Bot, msg *models.Message) {
 📝 <b>Examples:</b>
 • /deposit 10.5
 • /withdraw 5.0 YourSolanaAddress
-• /tip $2.5`
+• /tip $2.5
+• /rain 50`
 
 	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID:    msg.Chat.ID,

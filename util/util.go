@@ -1,142 +1,72 @@
 package util
 
 import (
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
+	"io"
 	"strconv"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/gagliardetto/solana-go"
+	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/ivypowered/ivy-sprite-bot/constants"
 )
 
-func ReactOk(s *discordgo.Session, m *discordgo.MessageCreate) {
-	s.MessageReactionAdd(m.ChannelID, m.ID, "\U00002705") // green check
+// Generate a 32-byte unique deposit/withdraw ID
+func GenerateID(amountRaw uint64) [32]byte {
+	var id [32]byte
+	_, err := io.ReadFull(rand.Reader, id[:24])
+	if err != nil {
+		panic(err)
+	}
+	binary.LittleEndian.PutUint64(id[24:], amountRaw)
+	return id
 }
 
-func ReactClock(s *discordgo.Session, m *discordgo.MessageCreate) {
-	s.MessageReactionAdd(m.ChannelID, m.ID, "\U0001F552") // three o' clock
+// Sign a withdrawal message using ed25519
+func SignWithdrawal(vault [32]byte, user [32]byte, id [32]byte, privkey [64]byte) [64]byte {
+	privateKey := ed25519.PrivateKey(privkey[:])
+
+	// Create the message: vault_address (32 bytes) + user_key (32 bytes) + withdraw_id (32 bytes)
+	message := make([]byte, 0, 96)
+	message = append(message, vault[:]...)
+	message = append(message, user[:]...)
+	message = append(message, id[:]...)
+
+	// Sign the message
+	signature := ed25519.Sign(privateKey, message)
+	var s [64]byte
+	copy(s[:], signature[:])
+	return s
 }
 
-func ReactErr(s *discordgo.Session, m *discordgo.MessageCreate) {
-	s.MessageReactionAdd(m.ChannelID, m.ID, "\U0000274C") // x
-}
+const VAULT_PREFIX string = "vault"
+const VAULT_DEPOSIT_PREFIX string = "vault_deposit"
+const VAULT_WITHDRAW_PREFIX string = "vault_withdraw"
 
-// DmUsage sends a usage embed to a user via DM
-func DmUsage(s *discordgo.Session, userID string, commandName string, commandDetails string) (*discordgo.Message, error) {
-	// Create DM channel
-	channel, err := s.UserChannelCreate(userID)
+var IVY_PROGRAM_ID solana.PublicKey = solana.MustPublicKeyFromBase58("DkGdbW8SJmUoVE9KaBRwrvsQVhcuidy47DimjrhSoySE")
+
+// Check whether a deposit is complete or not
+func IsDepositComplete(r *rpc.Client, vault [32]byte, id [32]byte) (bool, error) {
+	deposit, _, err := solana.FindProgramAddress([][]byte{
+		[]byte(VAULT_DEPOSIT_PREFIX),
+		vault[:],
+		id[:],
+	}, IVY_PROGRAM_ID)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-
-	// Create purple embed
-	embed := &discordgo.MessageEmbed{
-		Title: "Usage",
-		Color: constants.IVY_PURPLE, // Purple
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:   commandName,
-				Value:  commandDetails,
-				Inline: false,
-			},
-		},
+	info, err := r.GetAccountInfo(context.Background(), deposit)
+	if err == rpc.ErrNotFound {
+		return false, nil
 	}
-
-	// Send the message
-	msg, err := s.ChannelMessageSendEmbed(channel.ID, embed)
 	if err != nil {
-		// User may have blocked the bot
-		return nil, err
+		return false, err
 	}
-
-	return msg, nil
-}
-
-// DmError sends an error embed to a user via DM
-func DmError(s *discordgo.Session, userID string, message string) (*discordgo.Message, error) {
-	// Create DM channel
-	channel, err := s.UserChannelCreate(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create red embed
-	embed := &discordgo.MessageEmbed{
-		Title:       "Error",
-		Description: message,
-		Color:       constants.IVY_RED, // Red
-	}
-
-	// Send the message
-	msg, err := s.ChannelMessageSendEmbed(channel.ID, embed)
-	if err != nil {
-		// User may have blocked the bot
-		return nil, err
-	}
-
-	return msg, nil
-}
-
-// DmClock sends an clock embed to a user via DM
-func DmClock(s *discordgo.Session, userID string, title string, message string) (*discordgo.Message, error) {
-	// Create DM channel
-	channel, err := s.UserChannelCreate(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create white embed
-	embed := &discordgo.MessageEmbed{
-		Title:       title,
-		Description: message,
-		Color:       constants.IVY_WHITE, // White
-	}
-
-	// Send the message
-	msg, err := s.ChannelMessageSendEmbed(channel.ID, embed)
-	if err != nil {
-		// User may have blocked the bot
-		return nil, err
-	}
-
-	return msg, nil
-}
-
-// DmSuccess sends a success embed to a user via DM
-func DmSuccess(s *discordgo.Session, userID string, message string, header string, footer string) (*discordgo.Message, error) {
-	// Create DM channel
-	channel, err := s.UserChannelCreate(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Use default header if empty
-	if header == "" {
-		header = "Success"
-	}
-
-	// Create green embed
-	embed := &discordgo.MessageEmbed{
-		Title:       header,
-		Description: message,
-		Color:       constants.IVY_GREEN, // Green
-	}
-
-	// Add footer if provided
-	if footer != "" {
-		embed.Footer = &discordgo.MessageEmbedFooter{
-			Text: footer,
-		}
-	}
-
-	// Send the message
-	msg, err := s.ChannelMessageSendEmbed(channel.ID, embed)
-	if err != nil {
-		// User may have blocked the bot
-		return nil, err
-	}
-
-	return msg, nil
+	return info.Value != nil && info.Value.Lamports > 0, nil
 }
 
 // parse an amount string and convert it to IVY

@@ -27,12 +27,12 @@ func getWithdrawUrl(withdrawId, discordId, discordName, signature string) string
 
 func WithdrawCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.GuildID != "" {
-		util.DmError(s, m.Author.ID, "Withdrawals can only be processed in DMs for security. Please send this command directly to me.")
+		DmError(s, m.Author.ID, "Withdrawals can only be processed in DMs for security. Please send this command directly to me.")
 		return
 	}
 
 	if len(args) == 0 || args[0] != "list" && len(args) != 2 {
-		util.DmUsage(s, m.Author.ID, "$withdraw amount sol_address OR $withdraw list", "Withdraw coins from your account or list past withdrawals. Must be used in DMs.\nExample: $withdraw 0.5 A32dqo7aTp3eHhxpSA6Cw67zWosKc3ymiYz2DbPVx8BK")
+		DmUsage(s, m.Author.ID, "$withdraw amount sol_address OR $withdraw list", "Withdraw coins from your account or list past withdrawals. Must be used in DMs.\nExample: $withdraw 0.5 A32dqo7aTp3eHhxpSA6Cw67zWosKc3ymiYz2DbPVx8BK")
 		return
 	}
 
@@ -43,16 +43,16 @@ func WithdrawCommand(database db.Database, args []string, s *discordgo.Session, 
 
 	amount, err := strconv.ParseFloat(args[0], 64)
 	if err != nil || amount <= 0 {
-		util.DmError(s, m.Author.ID, "Please enter a valid positive amount")
+		DmError(s, m.Author.ID, "Please enter a valid positive amount")
 		return
 	}
 
 	// Convert to RAW
-	amountRaw := uint64(amount * db.IVY_DECIMALS)
+	amountRaw := uint64(amount * constants.IVY_FACTOR)
 
 	userKey, err := solana.PublicKeyFromBase58(args[1])
 	if err != nil {
-		util.DmError(s, m.Author.ID, "Please enter a valid base58-encoded Solana address")
+		DmError(s, m.Author.ID, "Please enter a valid base58-encoded Solana address")
 		return
 	}
 
@@ -60,13 +60,13 @@ func WithdrawCommand(database db.Database, args []string, s *discordgo.Session, 
 
 	balanceRaw, err := database.GetUserBalanceRaw(m.Author.ID)
 	if err != nil {
-		util.DmError(s, m.Author.ID, "Error checking balance")
+		DmError(s, m.Author.ID, "Error checking balance")
 		return
 	}
 
 	if balanceRaw < amountRaw {
-		balance := float64(balanceRaw) / db.IVY_DECIMALS
-		util.DmError(s, m.Author.ID, fmt.Sprintf("Insufficient balance. Your balance: **%.9f** IVY", balance))
+		balance := float64(balanceRaw) / constants.IVY_FACTOR
+		DmError(s, m.Author.ID, fmt.Sprintf("Insufficient balance. Your balance: **%.9f** IVY", balance))
 		return
 	}
 
@@ -81,18 +81,18 @@ func WithdrawCommand(database db.Database, args []string, s *discordgo.Session, 
 	// Create withdrawal and debit user atomically
 	err = database.CreateWithdrawal(withdrawID, m.Author.ID, balanceRaw, amountRaw, signatureHex)
 	if err != nil {
-		util.DmError(s, m.Author.ID, fmt.Sprintf("Error processing withdrawal: %v", err))
+		DmError(s, m.Author.ID, fmt.Sprintf("Error processing withdrawal: %v", err))
 		return
 	}
 
 	// Get new balance
 	newBalanceRaw, _ := database.GetUserBalanceRaw(m.Author.ID)
-	newBalance := float64(newBalanceRaw) / db.IVY_DECIMALS
+	newBalance := float64(newBalanceRaw) / constants.IVY_FACTOR
 
 	// Get user info
 	user, err := s.User(m.Author.ID)
 	if err != nil {
-		util.DmError(s, m.Author.ID, "Error getting user info")
+		DmError(s, m.Author.ID, "Error getting user info")
 		return
 	}
 
@@ -143,7 +143,7 @@ func listWithdrawals(database db.Database, s *discordgo.Session, m *discordgo.Me
 	// This requires adding a method to Database for listing withdrawals
 	withdrawals, err := database.ListWithdrawals(m.Author.ID, 10)
 	if err != nil {
-		util.DmError(s, m.Author.ID, "Error fetching withdrawals")
+		DmError(s, m.Author.ID, "Error fetching withdrawals")
 		return
 	}
 
@@ -157,7 +157,7 @@ func listWithdrawals(database db.Database, s *discordgo.Session, m *discordgo.Me
 		embed.Description = "No withdrawals found"
 	} else {
 		for _, withdrawal := range withdrawals {
-			amount := float64(withdrawal.AmountRaw) / db.IVY_DECIMALS
+			amount := float64(withdrawal.AmountRaw) / constants.IVY_FACTOR
 
 			// Get user info for URL
 			user, _ := s.User(m.Author.ID)

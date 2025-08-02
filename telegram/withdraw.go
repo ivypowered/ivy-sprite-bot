@@ -58,7 +58,7 @@ func WithdrawCommand(ctx context.Context, database db.Database, b *bot.Bot, msg 
 	}
 
 	// Convert to RAW
-	amountRaw := uint64(amount * db.IVY_DECIMALS)
+	amountRaw := uint64(amount * constants.IVY_FACTOR)
 
 	userKey, err := solana.PublicKeyFromBase58(args[1])
 	if err != nil {
@@ -76,7 +76,7 @@ func WithdrawCommand(ctx context.Context, database db.Database, b *bot.Bot, msg 
 	}
 
 	if balanceRaw < amountRaw {
-		balance := float64(balanceRaw) / db.IVY_DECIMALS
+		balance := float64(balanceRaw) / constants.IVY_FACTOR
 		sendError(ctx, b, msg.Chat.ID, fmt.Sprintf("Insufficient balance. Your balance: <b>%.9f</b> IVY", balance))
 		return
 	}
@@ -98,7 +98,7 @@ func WithdrawCommand(ctx context.Context, database db.Database, b *bot.Bot, msg 
 
 	// Get new balance
 	newBalanceRaw, _ := database.GetUserBalanceRaw(userID)
-	newBalance := float64(newBalanceRaw) / db.IVY_DECIMALS
+	newBalance := float64(newBalanceRaw) / constants.IVY_FACTOR
 
 	// Get user info
 	username := msg.From.Username
@@ -163,7 +163,7 @@ func listWithdrawals(ctx context.Context, database db.Database, b *bot.Bot, msg 
 	}
 
 	for i, withdrawal := range withdrawals {
-		amount := float64(withdrawal.AmountRaw) / db.IVY_DECIMALS
+		amount := float64(withdrawal.AmountRaw) / constants.IVY_FACTOR
 
 		withdrawURL := getWithdrawUrl(
 			withdrawal.WithdrawID,

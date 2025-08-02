@@ -36,8 +36,11 @@ const IVY_PURPLE = 0x800080
 const IVY_YELLOW = 0xFDC700
 const IVY_WHITE = 0xFFFFFF
 
-// Minimum rain amount
-const RAIN_MIN_AMOUNT = 0.01
+// Minimum rain amount in USD
+const RAIN_MIN_AMOUNT_USD = 0.50
+
+// Factor to divide/multiply by to convert to/from raw
+const IVY_FACTOR = 1_000_000_000
 
 // Amount of people who have to be active for rain to work
 const RAIN_MIN_ACTIVE_COUNT = 5

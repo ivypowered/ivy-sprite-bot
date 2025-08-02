@@ -7,7 +7,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/ivypowered/ivy-sprite-bot/constants"
 	"github.com/ivypowered/ivy-sprite-bot/db"
-	"github.com/ivypowered/ivy-sprite-bot/util"
 )
 
 func BalanceCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -15,12 +14,12 @@ func BalanceCommand(database db.Database, args []string, s *discordgo.Session, m
 
 	balanceRaw, err := database.GetUserBalanceRaw(m.Author.ID)
 	if err != nil {
-		util.DmError(s, m.Author.ID, err.Error())
+		DmError(s, m.Author.ID, err.Error())
 		return
 	}
 
 	// Convert RAW to display value
-	balance := float64(balanceRaw) / db.IVY_DECIMALS
+	balance := float64(balanceRaw) / constants.IVY_FACTOR
 
 	// Create the embed for DM
 	name := m.Author.GlobalName

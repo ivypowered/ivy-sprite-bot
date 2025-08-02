@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+	"github.com/ivypowered/ivy-sprite-bot/constants"
 	"github.com/ivypowered/ivy-sprite-bot/db"
 )
 
@@ -50,7 +51,7 @@ func MoveCommand(ctx context.Context, database db.Database, b *bot.Bot, msg *mod
 	discordID = strconv.FormatUint(discordIDint, 10)
 
 	// Convert to RAW
-	amountRaw := uint64(amount * db.IVY_DECIMALS)
+	amountRaw := uint64(amount * constants.IVY_FACTOR)
 
 	// Get user IDs
 	telegramID := getDatabaseID(msg.From.ID)
@@ -78,7 +79,7 @@ func MoveCommand(ctx context.Context, database db.Database, b *bot.Bot, msg *mod
 	}
 
 	if senderBalanceRaw < amountRaw {
-		senderBalance := float64(senderBalanceRaw) / db.IVY_DECIMALS
+		senderBalance := float64(senderBalanceRaw) / constants.IVY_FACTOR
 		sendError(ctx, b, msg.Chat.ID, fmt.Sprintf("Insufficient balance. Your balance: <b>%.9f</b> IVY", senderBalance))
 		return
 	}
@@ -92,11 +93,11 @@ func MoveCommand(ctx context.Context, database db.Database, b *bot.Bot, msg *mod
 
 	// Get new balance
 	newBalanceRaw, _ := database.GetUserBalanceRaw(telegramID)
-	newBalance := float64(newBalanceRaw) / db.IVY_DECIMALS
+	newBalance := float64(newBalanceRaw) / constants.IVY_FACTOR
 
 	// Send success message
 	sendSuccess(ctx, b, msg.Chat.ID,
-		fmt.Sprintf("Successfully moved <b>%.9f IVY</b> to Discord user <code>%s</code>\n\nYour new balance: <b>%.9f IVY</b>\n\n💡 The recipient can check their balance in Discord with /balance",
+		fmt.Sprintf("Successfully moved <b>%.9f IVY</b> to Discord user <code>%s</code>\n\nYour new balance: <b>%.9f IVY</b>\n\n💡 The recipient can check their balance in Discord with $balance",
 			amount, discordID, newBalance),
 		"✉️ Transfer to Discord Complete")
 }

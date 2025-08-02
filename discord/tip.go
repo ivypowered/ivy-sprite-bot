@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/ivypowered/ivy-sprite-bot/constants"
 	"github.com/ivypowered/ivy-sprite-bot/db"
 	"github.com/ivypowered/ivy-sprite-bot/util"
 )
@@ -15,8 +16,8 @@ var TELEGRAM_ID_REGEX = regexp.MustCompile(`tg:(\d+)$`)
 
 func TipCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	if len(args) != 2 {
-		util.ReactErr(s, m)
-		util.DmUsage(s, m.Author.ID, "$tip @user <amount>", "Send coins to another user. Mention the user and specify a positive amount.")
+		ReactErr(s, m)
+		DmUsage(s, m.Author.ID, "$tip @user <amount>", "Send coins to another user. Mention the user and specify a positive amount.")
 		return
 	}
 
@@ -33,31 +34,31 @@ func TipCommand(database db.Database, args []string, s *discordgo.Session, m *di
 		// Don't ensure TG user exists, because it might be wrong
 		extant, err := database.IsUserExtant(recipientID)
 		if err != nil {
-			util.ReactErr(s, m)
-			util.DmError(s, m.Author.ID, fmt.Sprintf("Error querying db: %v", err))
+			ReactErr(s, m)
+			DmError(s, m.Author.ID, fmt.Sprintf("Error querying db: %v", err))
 			return
 		}
 		if !extant {
-			util.ReactErr(s, m)
-			util.DmError(s, m.Author.ID, fmt.Sprintf("Telegram user %s not found, make sure they have run /balance at least once", recipientID))
+			ReactErr(s, m)
+			DmError(s, m.Author.ID, fmt.Sprintf("Telegram user %s not found, make sure they have run /balance at least once", recipientID))
 			return
 		}
 	} else {
-		util.ReactErr(s, m)
-		util.DmError(s, m.Author.ID, "Please mention a valid user")
+		ReactErr(s, m)
+		DmError(s, m.Author.ID, "Please mention a valid user")
 		return
 	}
 
 	// Parse amount
 	amount, err := util.ParseAmount(args[1])
 	if err != nil {
-		util.ReactErr(s, m)
-		util.DmError(s, m.Author.ID, "Please enter a valid positive amount")
+		ReactErr(s, m)
+		DmError(s, m.Author.ID, "Please enter a valid positive amount")
 		return
 	}
 
 	// Convert to RAW
-	amountRaw := uint64(amount * db.IVY_DECIMALS)
+	amountRaw := uint64(amount * constants.IVY_FACTOR)
 
 	// Ensure author exists in database
 	database.EnsureUserExists(m.Author.ID)
@@ -65,42 +66,42 @@ func TipCommand(database db.Database, args []string, s *discordgo.Session, m *di
 	// Check sender's balance
 	senderBalanceRaw, err := database.GetUserBalanceRaw(m.Author.ID)
 	if err != nil {
-		util.ReactErr(s, m)
-		util.DmError(s, m.Author.ID, "Error checking balance")
+		ReactErr(s, m)
+		DmError(s, m.Author.ID, "Error checking balance")
 		return
 	}
 
 	if senderBalanceRaw < amountRaw {
-		senderBalance := float64(senderBalanceRaw) / db.IVY_DECIMALS
-		util.ReactErr(s, m)
-		util.DmError(s, m.Author.ID, fmt.Sprintf("Insufficient balance. Your balance: **%.9f** IVY", senderBalance))
+		senderBalance := float64(senderBalanceRaw) / constants.IVY_FACTOR
+		ReactErr(s, m)
+		DmError(s, m.Author.ID, fmt.Sprintf("Insufficient balance. Your balance: **%.9f** IVY", senderBalance))
 		return
 	}
 
 	// Perform transfer
 	err = database.TransferFundsRaw(m.Author.ID, recipientID, amountRaw)
 	if err != nil {
-		util.ReactErr(s, m)
-		util.DmError(s, m.Author.ID, fmt.Sprintf("Error processing transfer: %v", err))
+		ReactErr(s, m)
+		DmError(s, m.Author.ID, fmt.Sprintf("Error processing transfer: %v", err))
 		return
 	}
 
 	// Get new balances
 	newBalanceRaw, _ := database.GetUserBalanceRaw(m.Author.ID)
-	newBalance := float64(newBalanceRaw) / db.IVY_DECIMALS
+	newBalance := float64(newBalanceRaw) / constants.IVY_FACTOR
 
-	util.ReactOk(s, m)
+	ReactOk(s, m)
 
 	// DM sender confirmation
-	util.DmSuccess(s, m.Author.ID,
+	DmSuccess(s, m.Author.ID,
 		fmt.Sprintf("Successfully sent **%.9f** IVY to <@%s>\n\nYour new balance: **%.9f** IVY", amount, recipientID, newBalance),
 		"Transfer Complete",
 		"")
 
 	// DM recipient notification
 	recipientBalanceRaw, _ := database.GetUserBalanceRaw(recipientID)
-	recipientBalance := float64(recipientBalanceRaw) / db.IVY_DECIMALS
-	util.DmSuccess(s, recipientID,
+	recipientBalance := float64(recipientBalanceRaw) / constants.IVY_FACTOR
+	DmSuccess(s, recipientID,
 		fmt.Sprintf("You received **%.9f** IVY from <@%s>\n\nYour new balance: **%.9f** IVY", amount, m.Author.ID, recipientBalance),
 		"Payment Received",
 		"")

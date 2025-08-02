@@ -31,16 +31,27 @@ func Start(database db.Database, token string) (func() error, error) {
 		}
 
 		msg := update.Message
-
-		// Ignore bot messages
-		if msg.From != nil && msg.From.IsBot {
+		if msg.From == nil {
 			return
 		}
 
-		text := msg.Text
+		// Ignore bot messages
+		if msg.From.IsBot {
+			return
+		}
+
+		text := strings.TrimSpace(msg.Text)
 
 		// Parse command
 		if !strings.HasPrefix(text, "/") {
+			// not IVY server?
+			if msg.Chat.ID != IVY_TELEGRAM_CHANNEL_ID {
+				return
+			}
+			err := database.UpdateActivityScore("telegram", getDatabaseID(msg.From.ID))
+			if err != nil {
+				log.Printf("error updating TG activity score: %v\n", err)
+			}
 			return
 		}
 
@@ -70,6 +81,8 @@ func Start(database db.Database, token string) (func() error, error) {
 			WithdrawCommand(ctx, database, b, msg, args)
 		case "tip":
 			TipCommand(ctx, database, b, msg, args)
+		case "rain":
+			RainCommand(ctx, database, b, msg, args)
 		default:
 			b.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID: msg.Chat.ID,
@@ -91,6 +104,7 @@ func Start(database db.Database, token string) (func() error, error) {
 			{Command: "deposit", Description: "Deposit Ivy tokens (Private chat only)"},
 			{Command: "withdraw", Description: "Withdraw Ivy tokens (Private chat only)"},
 			{Command: "tip", Description: "Tip Ivy tokens to another user"},
+			{Command: "rain", Description: "Rain Ivy tokens on active users"},
 			{Command: "id", Description: "See your Ivy Sprite ID"},
 			{Command: "help", Description: "Show available commands"},
 			{Command: "move", Description: "Move funds to Discord (Private chat only)"},

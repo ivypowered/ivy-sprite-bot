@@ -21,7 +21,7 @@ func BalanceCommand(ctx context.Context, database db.Database, b *bot.Bot, msg *
 	}
 
 	// Convert RAW to display value
-	balance := float64(balanceRaw) / db.IVY_DECIMALS
+	balance := float64(balanceRaw) / constants.IVY_FACTOR
 	price := constants.PRICE.Get(constants.RPC_CLIENT)
 
 	// Format the balance message

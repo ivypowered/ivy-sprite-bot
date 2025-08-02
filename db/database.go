@@ -10,8 +10,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const IVY_DECIMALS = 1e9
-
 type Deposit struct {
 	DepositID string
 	UserID    string
@@ -356,7 +354,6 @@ func (db Database) GetActiveUsersForRain(serverID string, minScore int) ([]strin
 }
 
 // Activity-related methods
-
 func (db Database) UpdateActivityScore(serverID, userID string) error {
 	currentTime := time.Now().Unix()
 

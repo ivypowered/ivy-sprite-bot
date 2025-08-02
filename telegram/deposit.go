@@ -60,7 +60,7 @@ func DepositCommand(ctx context.Context, database db.Database, b *bot.Bot, msg *
 	}
 
 	// Convert to RAW
-	amountRaw := uint64(amount * db.IVY_DECIMALS)
+	amountRaw := uint64(amount * constants.IVY_FACTOR)
 	userID := getDatabaseID(msg.From.ID)
 
 	database.EnsureUserExists(userID)
@@ -166,8 +166,8 @@ func checkDeposit(ctx context.Context, database db.Database, b *bot.Bot, msg *mo
 
 	// Get new balance
 	newBalanceRaw, _ := database.GetUserBalanceRaw(userID)
-	newBalance := float64(newBalanceRaw) / db.IVY_DECIMALS
-	amount := float64(amountRaw) / db.IVY_DECIMALS
+	newBalance := float64(newBalanceRaw) / constants.IVY_FACTOR
+	amount := float64(amountRaw) / constants.IVY_FACTOR
 
 	sendSuccess(ctx, b, msg.Chat.ID,
 		fmt.Sprintf("Deposited <b>%.9f IVY</b>\nNew balance: <b>%.9f IVY</b>", amount, newBalance),
@@ -196,7 +196,7 @@ func listDeposits(ctx context.Context, database db.Database, b *bot.Bot, msg *mo
 	}
 
 	for i, deposit := range deposits {
-		amount := float64(deposit.AmountRaw) / db.IVY_DECIMALS
+		amount := float64(deposit.AmountRaw) / constants.IVY_FACTOR
 		status := "❌ Pending"
 		if deposit.Completed {
 			status = "✅ Complete"

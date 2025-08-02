@@ -2,15 +2,28 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )
 
+const IVY_TELEGRAM_CHANNEL_ID int64 = -1002894078752
+
+// Convert tg id -> database id
 func getDatabaseID(tgId int64) string {
 	return fmt.Sprintf("tg:%d", tgId)
+}
+
+// Convert database id -> tg id
+func fromDatabaseID(dbId string) (int64, error) {
+	if !strings.HasPrefix(dbId, "tg:") {
+		return 0, errors.New("db id lacking \"tg:\" prefix")
+	}
+	return strconv.ParseInt(dbId[3:], 10, 64)
 }
 
 // Helper functions for consistent message formatting

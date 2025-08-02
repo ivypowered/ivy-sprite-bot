@@ -7,7 +7,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/ivypowered/ivy-sprite-bot/constants"
 	"github.com/ivypowered/ivy-sprite-bot/db"
-	"github.com/ivypowered/ivy-sprite-bot/util"
 )
 
 func IdCommand(database db.Database, args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -32,10 +31,10 @@ func IdCommand(database db.Database, args []string, s *discordgo.Session, m *dis
 	// Send via DM
 	channel, err := s.UserChannelCreate(m.Author.ID)
 	if err != nil {
-		util.ReactErr(s, m)
+		ReactErr(s, m)
 		return
 	}
 
-	util.ReactOk(s, m)
+	ReactOk(s, m)
 	s.ChannelMessageSendEmbed(channel.ID, embed)
 }

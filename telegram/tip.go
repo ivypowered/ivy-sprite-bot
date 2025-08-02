@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+	"github.com/ivypowered/ivy-sprite-bot/constants"
 	"github.com/ivypowered/ivy-sprite-bot/db"
 	"github.com/ivypowered/ivy-sprite-bot/util"
 )
@@ -43,7 +44,7 @@ func TipCommand(ctx context.Context, database db.Database, b *bot.Bot, msg *mode
 	}
 
 	// Convert to RAW
-	amountRaw := uint64(amount * db.IVY_DECIMALS)
+	amountRaw := uint64(amount * constants.IVY_FACTOR)
 	senderID := getDatabaseID(msg.From.ID)
 
 	// Don't allow tipping yourself
@@ -64,7 +65,7 @@ func TipCommand(ctx context.Context, database db.Database, b *bot.Bot, msg *mode
 	}
 
 	if senderBalanceRaw < amountRaw {
-		senderBalance := float64(senderBalanceRaw) / db.IVY_DECIMALS
+		senderBalance := float64(senderBalanceRaw) / constants.IVY_FACTOR
 		sendError(ctx, b, msg.Chat.ID, fmt.Sprintf("Insufficient balance. Your balance: <b>%.9f</b> IVY", senderBalance))
 		return
 	}
@@ -102,7 +103,7 @@ func TipCommand(ctx context.Context, database db.Database, b *bot.Bot, msg *mode
 
 	// Send notification to recipient via DM
 	recipientBalanceRaw, _ := database.GetUserBalanceRaw(recipientID)
-	recipientBalance := float64(recipientBalanceRaw) / db.IVY_DECIMALS
+	recipientBalance := float64(recipientBalanceRaw) / constants.IVY_FACTOR
 
 	b.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID: msg.ReplyToMessage.From.ID,
