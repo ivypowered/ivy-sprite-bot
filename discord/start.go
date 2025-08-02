@@ -29,14 +29,17 @@ func Start(db db.Database, token string) (func() error, error) {
 	}
 
 	commands := map[string]CommandFunc{
-		"balance":  BalanceCommand,
-		"deposit":  DepositCommand,
-		"help":     HelpCommand,
-		"id":       IdCommand,
-		"rain":     RainCommand,
-		"tip":      TipCommand,
-		"link":     LinkCommand,
-		"withdraw": WithdrawCommand,
+		"balance":     BalanceCommand,
+		"deposit":     DepositCommand,
+		"help":        HelpCommand,
+		"id":          IdCommand,
+		"rain":        RainCommand,
+		"tip":         TipCommand,
+		"link":        LinkCommand,
+		"withdraw":    WithdrawCommand,
+		"contest":     ContestCommand,
+		"leaderboard": LeaderboardCommand,
+		"referral":    ReferralCommand,
 	}
 
 	// Register message handler

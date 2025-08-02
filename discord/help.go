@@ -43,6 +43,16 @@ func HelpCommand(database db.Database, args []string, s *discordgo.Session, m *d
 				Inline: false,
 			},
 			{
+				Name:   "Leaderboard",
+				Value:  "`$leaderboard` - Show the leaderboard for the current contest",
+				Inline: false,
+			},
+			{
+				Name:   "Referral",
+				Value:  "`$referral` - Generate a referral link for the current contest",
+				Inline: false,
+			},
+			{
 				Name:   "Help",
 				Value:  "`$help` - Show this help message",
 				Inline: false,

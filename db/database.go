@@ -97,6 +97,10 @@ func (db Database) initTables() error {
             linked_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
         );`,
 		`CREATE INDEX IF NOT EXISTS idx_wallet_user ON wallets(user_id);`,
+		`CREATE TABLE IF NOT EXISTS contest (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );`,
 	}
 
 	for _, query := range queries {
@@ -632,4 +636,25 @@ func (db Database) GetWalletToUserMap(wallets []string) (map[string]string, erro
 	}
 
 	return result, rows.Err()
+}
+
+// SetContestAddress sets the contest address
+func (db Database) SetContestAddress(address string) error {
+	_, err := db.inner.Exec(
+		"INSERT OR REPLACE INTO contest (key, value) VALUES ('address', ?)",
+		address,
+	)
+	return err
+}
+
+// GetContestAddress retrieves the contest address
+func (db Database) GetContestAddress() (string, error) {
+	var address string
+	err := db.inner.QueryRow(
+		"SELECT value FROM contest WHERE key = 'address'",
+	).Scan(&address)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return address, err
 }

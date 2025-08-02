@@ -59,3 +59,9 @@ const ACTIVITY_DELTA_MAX = 1200
 
 // After this time has passed between messages, activity is reset
 const ACTIVITY_DELTA_RESET = 1800
+
+// Violet's discord ID
+const VIOLET_ID = "1348921951493554277"
+
+// The URL of the aggregator
+const AGGREGATOR_URL = "http://127.0.0.1:5000"

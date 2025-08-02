@@ -214,8 +214,7 @@ func handleRainChannels(database db.Database, args []string, s *discordgo.Sessio
 			DmError(s, m.Author.ID, "Please mention exactly one channel to add")
 			return
 		}
-		// Check if user is violet
-		if m.Author.ID != "1348921951493554277" {
+		if m.Author.ID != constants.VIOLET_ID {
 			ReactErr(s, m)
 			DmError(s, m.Author.ID, "For now only violet can change these variables")
 			return
