@@ -43,10 +43,10 @@ const LINK_RESPONSE_VALIDITY_INTERVAL = 300
 func LinkVerify(response [104]byte, id string) ([32]byte, error) {
 	wallet := solana.PublicKey(response[0:32])
 	signature := solana.Signature(response[32:96])
-	timestamp := binary.LittleEndian.Uint64(response[96:])
-	currentTimestamp := uint64(time.Now().Unix())
-	if timestamp < currentTimestamp || (currentTimestamp-timestamp) > 500 {
-		return [32]byte{}, fmt.Errorf("invalid timestamp for wallet linking: it's %d but got %d, try again", currentTimestamp, timestamp)
+	timestamp := binary.LittleEndian.Uint64(response[96:]) // lower
+	currentTimestamp := uint64(time.Now().Unix())          // higher
+	if timestamp > currentTimestamp || (currentTimestamp-timestamp) > LINK_RESPONSE_VALIDITY_INTERVAL {
+		return [32]byte{}, fmt.Errorf("link expired: it's %d but got %d, try again", currentTimestamp, timestamp)
 	}
 	msg := fmt.Sprintf("Link wallet %s to ivy-sprite user %s at %d", wallet.String(), id, timestamp)
 	if !signature.Verify(wallet, []byte(msg)) {

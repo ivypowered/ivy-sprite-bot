@@ -3,6 +3,7 @@ package discord
 import (
 	"encoding/base64"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -65,12 +66,12 @@ func LinkCommand(database db.Database, args []string, s *discordgo.Session, m *d
 
 	default:
 		// Assume it's a wallet address
-		generateLinkURL(database, args[0], s, m)
+		generateLinkURL(args[0], s, m)
 		return
 	}
 }
 
-func generateLinkURL(database db.Database, walletStr string, s *discordgo.Session, m *discordgo.MessageCreate) {
+func generateLinkURL(walletStr string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Validate wallet address
 	wallet, err := solana.PublicKeyFromBase58(walletStr)
 	if err != nil {
@@ -111,7 +112,7 @@ func generateLinkURL(database db.Database, walletStr string, s *discordgo.Sessio
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "This link expires in 10 minutes",
+			Text: "This link expires in " + strconv.Itoa(util.LINK_RESPONSE_VALIDITY_INTERVAL/60) + " minutes",
 		},
 	}
 
