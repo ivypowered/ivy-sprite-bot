@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/url"
-	"strconv"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/ivypowered/ivy-sprite-bot/constants"
@@ -42,7 +41,7 @@ func DepositCommand(database db.Database, args []string, s *discordgo.Session, m
 	}
 
 	// Parse amount for new deposit
-	amount, err := strconv.ParseFloat(args[0], 64)
+	amount, err := util.ParseAmount(args[0])
 	if err != nil || amount <= 0 {
 		DmError(s, m.Author.ID, "Please enter a valid positive amount")
 		return
