@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/ivypowered/ivy-sprite-bot/constants"
 	"github.com/ivypowered/ivy-sprite-bot/db"
 )
 
@@ -18,7 +19,7 @@ type CommandFunc func(
 )
 
 // starts the discord connection, returns a function that closes it!
-func Start(db db.Database, token string) (func() error, error) {
+func Start(db db.Database, token string, submitC <-chan string) (func() error, error) {
 	if token == "" {
 		return nil, errors.New("no token passed to discord.Start")
 	}
@@ -39,7 +40,7 @@ func Start(db db.Database, token string) (func() error, error) {
 		"withdraw":    WithdrawCommand,
 		"contest":     ContestCommand,
 		"leaderboard": LeaderboardCommand,
-		"referral":    ReferralCommand,
+		"volume":      VolumeCommand,
 	}
 
 	// Register message handler
@@ -96,8 +97,29 @@ func Start(db db.Database, token string) (func() error, error) {
 		return nil, fmt.Errorf("Error opening connection: %v", err)
 	}
 
+	// Submit logic
+	closeSubmitC := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-closeSubmitC:
+				return
+			case message, ok := <-submitC:
+				if !ok {
+					// closed
+					return
+				}
+				_, err := dg.ChannelMessageSend(constants.SUBMIT_CHANNEL_ID, message)
+				if err != nil {
+					log.Printf("can't submit link: %v\n", err)
+				}
+			}
+		}
+	}()
+
 	// Return close fn
 	return func() error {
+		close(closeSubmitC)
 		return dg.Close()
 	}, nil
 }

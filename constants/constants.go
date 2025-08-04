@@ -65,3 +65,6 @@ const VIOLET_ID = "1348921951493554277"
 
 // The URL of the aggregator
 const AGGREGATOR_URL = "http://127.0.0.1:5000"
+
+// Channel to submit game links in
+const SUBMIT_CHANNEL_ID = "1401358074341753005"

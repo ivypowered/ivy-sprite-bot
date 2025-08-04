@@ -19,7 +19,7 @@ type CommandFunc func(
 	args []string,
 )
 
-func Start(database db.Database, token string) (func() error, error) {
+func Start(database db.Database, token string, submitC chan<- string) (func() error, error) {
 	if token == "" {
 		return nil, errors.New("no token passed to telegram.Start")
 	}
@@ -83,6 +83,8 @@ func Start(database db.Database, token string) (func() error, error) {
 			TipCommand(ctx, database, b, msg, args)
 		case "rain":
 			RainCommand(ctx, database, b, msg, args)
+		case "submit":
+			SubmitCommand(ctx, b, msg, args, submitC)
 		default:
 			b.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID: msg.Chat.ID,
@@ -108,6 +110,7 @@ func Start(database db.Database, token string) (func() error, error) {
 			{Command: "id", Description: "See your Ivy Sprite ID"},
 			{Command: "help", Description: "Show available commands"},
 			{Command: "move", Description: "Move funds to Discord (Private chat only)"},
+			{Command: "submit", Description: "Submit game to Discord game jam"},
 		},
 	})
 	if err != nil {

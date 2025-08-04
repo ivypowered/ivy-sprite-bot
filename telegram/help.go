@@ -40,6 +40,9 @@ func HelpCommand(ctx context.Context, b *bot.Bot, msg *models.Message) {
 🔄 <b>Move</b> <i>(Private chat only)</i>
 • /move [amount] [discord_id] - Move funds to Discord
 
+📄 <b>Submit</b>
+• /submit [link] - Submit link to Discord game jam
+
 📝 <b>Examples:</b>
 • /deposit 10.5
 • /withdraw 5.0 YourSolanaAddress

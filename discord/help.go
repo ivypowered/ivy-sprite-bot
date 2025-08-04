@@ -48,8 +48,8 @@ func HelpCommand(database db.Database, args []string, s *discordgo.Session, m *d
 				Inline: false,
 			},
 			{
-				Name:   "Referral",
-				Value:  "`$referral` - Generate a referral link for the current contest",
+				Name:   "Volume",
+				Value:  "`$volume` - Show your total trading volume across all linked wallets",
 				Inline: false,
 			},
 			{

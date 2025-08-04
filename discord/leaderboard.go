@@ -12,15 +12,14 @@ import (
 	"github.com/ivypowered/ivy-sprite-bot/db"
 )
 
-type TvEntry struct {
-	User     string `json:"user"`
-	Personal uint64 `json:"personal"`
-	Referred uint64 `json:"referred"`
+type VolumeEntry struct {
+	User   string  `json:"user"`
+	Volume float32 `json:"volume"`
 }
 
-type TvBoardResponse struct {
-	Status string    `json:"status"`
-	Data   []TvEntry `json:"data"`
+type VolumeBoardResponse struct {
+	Status string        `json:"status"`
+	Data   []VolumeEntry `json:"data"`
 }
 
 const LEADERBOARD_USAGE = "$leaderboard"
@@ -41,7 +40,7 @@ func LeaderboardCommand(database db.Database, args []string, s *discordgo.Sessio
 	}
 
 	// Fetch leaderboard data from aggregator
-	url := fmt.Sprintf("%s/games/%s/tv_board?count=25&skip=0", constants.AGGREGATOR_URL, contestAddress)
+	url := fmt.Sprintf("%s/games/%s/volume_board?count=25&skip=0", constants.AGGREGATOR_URL, contestAddress)
 	resp, err := http.Get(url)
 	if err != nil {
 		ReactErr(s, m)
@@ -57,18 +56,19 @@ func LeaderboardCommand(database db.Database, args []string, s *discordgo.Sessio
 		return
 	}
 
-	var tvResponse TvBoardResponse
-	err = json.Unmarshal(body, &tvResponse)
-	if err != nil || tvResponse.Status != "ok" {
+	var volumeResponse VolumeBoardResponse
+	err = json.Unmarshal(body, &volumeResponse)
+	if err != nil || volumeResponse.Status != "ok" {
 		ReactErr(s, m)
 		DmError(s, m.Author.ID, "Failed to parse leaderboard data.")
 		return
 	}
 
-	// Get all wallet addresses from the response
-	wallets := make([]string, len(tvResponse.Data))
-	for i, entry := range tvResponse.Data {
-		wallets[i] = entry.User
+	// Parse the response data into a more usable format
+	entries := volumeResponse.Data
+	wallets := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		wallets = append(wallets, entry.User)
 	}
 
 	// Get wallet to user mapping
@@ -87,25 +87,18 @@ func LeaderboardCommand(database db.Database, args []string, s *discordgo.Sessio
 		},
 	}
 
-	// Get price
-	price := constants.PRICE.Get(constants.RPC_CLIENT)
-
-	if len(tvResponse.Data) == 0 {
+	if len(entries) == 0 {
 		embed.Description = "No participants yet!"
 	} else {
 		var leaderboardText strings.Builder
 
-		for i, entry := range tvResponse.Data {
+		for i, entry := range entries {
 			if i >= 25 { // Limit to top 25
 				break
 			}
 
-			// Calculate total volume in IVY
-			totalVolumeRaw := entry.Personal + entry.Referred
-			totalVolumeIvy := float64(totalVolumeRaw) / float64(constants.IVY_FACTOR)
-
-			// Convert to USD using current IVY price
-			totalVolumeUsd := totalVolumeIvy * price
+			// Volume is already in USD from the aggregator
+			totalVolumeUsd := entry.Volume
 
 			// Format the display name (user mention or address)
 			var displayName string
@@ -135,22 +128,11 @@ func LeaderboardCommand(database db.Database, args []string, s *discordgo.Sessio
 
 			// Format the line
 			leaderboardText.WriteString(fmt.Sprintf(
-				"%s%s - **$%.2f**",
+				"%s%s - **$%.2f**\n",
 				medal,
 				displayName,
 				totalVolumeUsd,
 			))
-
-			// Add breakdown if they have referred volume
-			if entry.Referred > 0 {
-				referredUsd := (float64(entry.Referred) / float64(constants.IVY_FACTOR)) * price
-				leaderboardText.WriteString(fmt.Sprintf(
-					" _(Referred: $%.2f)_",
-					referredUsd,
-				))
-			}
-
-			leaderboardText.WriteString("\n")
 		}
 
 		embed.Description = leaderboardText.String()

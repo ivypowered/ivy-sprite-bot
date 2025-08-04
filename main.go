@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -10,6 +11,7 @@ import (
 	"github.com/ivypowered/ivy-sprite-bot/db"
 	"github.com/ivypowered/ivy-sprite-bot/discord"
 	"github.com/ivypowered/ivy-sprite-bot/telegram"
+	"github.com/smallnest/chanx"
 )
 
 var DISCORD_TOKEN string = os.Getenv("DISCORD_TOKEN")
@@ -30,8 +32,16 @@ func main() {
 	// Track cleanup functions
 	var cleanupFuncs []func() error
 
+	// Create submit channel for submitting links Telegram->Discord
+	submitCtx, stopSubmitFn := context.WithCancel(context.Background())
+	cleanupFuncs = append(cleanupFuncs, func() error {
+		stopSubmitFn()
+		return nil
+	})
+	submit := chanx.NewUnboundedChan[string](submitCtx, 1)
+
 	// Start Telegram bot if token is provided
-	stopTelegramFn, err := telegram.Start(database, TELEGRAM_TOKEN)
+	stopTelegramFn, err := telegram.Start(database, TELEGRAM_TOKEN, submit.In)
 	if err != nil {
 		log.Fatal("Error starting Telegram bot:", err)
 	}
@@ -39,7 +49,7 @@ func main() {
 	log.Println("Telegram bot online")
 
 	// Start Discord bot
-	stopDiscordFn, err := discord.Start(database, DISCORD_TOKEN)
+	stopDiscordFn, err := discord.Start(database, DISCORD_TOKEN, submit.Out)
 	if err != nil {
 		log.Fatal("Error starting Discord bot:", err)
 	}
