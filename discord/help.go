@@ -43,13 +43,13 @@ func HelpCommand(database db.Database, args []string, s *discordgo.Session, m *d
 				Inline: false,
 			},
 			{
-				Name:   "Leaderboard",
-				Value:  "`$leaderboard` - Show the leaderboard for the current contest",
+				Name:   "Volume",
+				Value:  "`$volume` - Show your total trading volume across all linked wallets\n`$volume leaderboard` - Show the volume leaderboard for the current contest",
 				Inline: false,
 			},
 			{
-				Name:   "Volume",
-				Value:  "`$volume` - Show your total trading volume across all linked wallets",
+				Name:   "PnL",
+				Value:  "`$pnl` - Show profit-and-loss for current contest\n`$pnl <address>` - Show profit-and-loss for a specific game\n`$pnl leaderboard` - Show profit-and-loss leaderboard",
 				Inline: false,
 			},
 			{

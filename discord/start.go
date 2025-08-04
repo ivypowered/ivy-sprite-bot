@@ -30,17 +30,17 @@ func Start(db db.Database, token string, submitC <-chan string) (func() error, e
 	}
 
 	commands := map[string]CommandFunc{
-		"balance":     BalanceCommand,
-		"deposit":     DepositCommand,
-		"help":        HelpCommand,
-		"id":          IdCommand,
-		"rain":        RainCommand,
-		"tip":         TipCommand,
-		"link":        LinkCommand,
-		"withdraw":    WithdrawCommand,
-		"contest":     ContestCommand,
-		"leaderboard": LeaderboardCommand,
-		"volume":      VolumeCommand,
+		"balance":  BalanceCommand,
+		"deposit":  DepositCommand,
+		"help":     HelpCommand,
+		"id":       IdCommand,
+		"rain":     RainCommand,
+		"tip":      TipCommand,
+		"link":     LinkCommand,
+		"withdraw": WithdrawCommand,
+		"contest":  ContestCommand,
+		"volume":   VolumeCommand,
+		"pnl":      PnlCommand,
 	}
 
 	// Register message handler
