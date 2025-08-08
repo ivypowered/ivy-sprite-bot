@@ -14,13 +14,14 @@ import (
 	"github.com/ivypowered/ivy-sprite-bot/db"
 )
 
-const PNL_USAGE = "$pnl OR $pnl <address> OR $pnl leaderboard"
+const PNL_USAGE = "$pnl OR $pnl <address> OR $pnl leaderboard [realized]"
 const PNL_DETAILS = `View your profit and loss statistics.
 
 Commands:
 • $pnl - Show PnL for the current contest
 • $pnl <address> - Show PnL for a specific game
-• $pnl leaderboard - Show the PnL leaderboard for current contest`
+• $pnl leaderboard - Show the PnL leaderboard for current contest
+• $pnl leaderboard realized - Show only realized gains leaderboard`
 
 type PnlResponse struct {
 	InUsd    float32 `json:"in_usd"`
@@ -58,7 +59,9 @@ func PnlCommand(database db.Database, args []string, s *discordgo.Session, m *di
 	}
 
 	if args[0] == "leaderboard" {
-		showPnlLeaderboard(database, s, m)
+		// Check for "realized" modifier
+		realized := len(args) > 1 && args[1] == "realized"
+		showPnlLeaderboard(database, realized, s, m)
 		return
 	}
 
@@ -191,7 +194,7 @@ func showGamePnl(database db.Database, gameAddress string, s *discordgo.Session,
 	ReactOk(s, m)
 }
 
-func showPnlLeaderboard(database db.Database, s *discordgo.Session, m *discordgo.MessageCreate) {
+func showPnlLeaderboard(database db.Database, realized bool, s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Get contest address
 	contestAddress, err := database.GetContestAddress()
 	if err != nil {
@@ -206,7 +209,7 @@ func showPnlLeaderboard(database db.Database, s *discordgo.Session, m *discordgo
 	}
 
 	// Fetch leaderboard data from aggregator
-	url := fmt.Sprintf("%s/games/%s/pnl_board?count=25&skip=0", constants.AGGREGATOR_URL, contestAddress)
+	url := fmt.Sprintf("%s/games/%s/pnl_board?count=25&skip=0&realized=%t", constants.AGGREGATOR_URL, contestAddress, realized)
 	resp, err := http.Get(url)
 	if err != nil {
 		ReactErr(s, m)
@@ -257,8 +260,13 @@ func showPnlLeaderboard(database db.Database, s *discordgo.Session, m *discordgo
 	}
 
 	// Build leaderboard embed
+	title := "🌿 Profit-and-Loss Leaderboard"
+	if realized {
+		title = "🌿 Realized Profit-and-Loss Leaderboard"
+	}
+
 	embed := &discordgo.MessageEmbed{
-		Title: "🌿 PnL Competition Standings",
+		Title: title,
 		Color: constants.IVY_GREEN,
 	}
 
@@ -267,8 +275,8 @@ func showPnlLeaderboard(database db.Database, s *discordgo.Session, m *discordgo
 	} else {
 		var leaderboardText strings.Builder
 
-		// Add current price for context
-		if currentPrice > 0 {
+		// Add current price for context (only for unrealized leaderboard)
+		if !realized && currentPrice > 0 {
 			leaderboardText.WriteString(fmt.Sprintf("**Current Price:** $%.4f\n\n", currentPrice))
 		}
 
@@ -276,11 +284,6 @@ func showPnlLeaderboard(database db.Database, s *discordgo.Session, m *discordgo
 			if i >= 15 {
 				break
 			}
-
-			// Calculate metrics
-			positionValue := entry.Position * currentPrice
-			metrics := calculatePnlMetrics(entry.InUsd, entry.OutUsd, positionValue)
-			realizedPercent := 100 - metrics.unrealizedPercent
 
 			// Format rank with medals
 			var rankEmoji string
@@ -298,28 +301,57 @@ func showPnlLeaderboard(database db.Database, s *discordgo.Session, m *discordgo
 			// Get player display name
 			displayName := getPlayerDisplayName(entry.User, walletToUser)
 
-			// Status indicator
-			var statusEmoji string
-			if realizedPercent >= 100 {
-				statusEmoji = "✅"
+			if realized {
+				// For realized leaderboard, only show realized gains
+				realizedPnl := calculateRealizedPnl(entry.InUsd, entry.OutUsd)
+
+				// Status indicator for profit/loss
+				var statusEmoji string
+				if realizedPnl > 0 {
+					statusEmoji = "📈"
+				} else if realizedPnl < 0 {
+					statusEmoji = "📉"
+				} else {
+					statusEmoji = "➖"
+				}
+
+				// Format the entry for realized leaderboard
+				leaderboardText.WriteString(fmt.Sprintf(
+					"%s %s\n**Realized PnL:** %+.1f%% %s\n\n",
+					rankEmoji,
+					displayName,
+					realizedPnl,
+					statusEmoji,
+				))
 			} else {
-				statusEmoji = ""
-			}
+				// For unrealized leaderboard, show full metrics
+				positionValue := entry.Position * currentPrice
+				metrics := calculatePnlMetrics(entry.InUsd, entry.OutUsd, positionValue)
+				realizedPercent := 100 - metrics.unrealizedPercent
 
-			realizedDisplay := "Fully realized"
-			if realizedPercent < 99 {
-				realizedDisplay = fmt.Sprintf("%.2f%%", realizedPercent)
-			}
+				// Status indicator
+				var statusEmoji string
+				if realizedPercent >= 100 {
+					statusEmoji = "✅"
+				} else {
+					statusEmoji = ""
+				}
 
-			// Format the entry
-			leaderboardText.WriteString(fmt.Sprintf(
-				"%s %s\n**PnL:** %+.1f%% • **Realized:** %s %s\n\n",
-				rankEmoji,
-				displayName,
-				metrics.pnlPercent,
-				realizedDisplay,
-				statusEmoji,
-			))
+				realizedDisplay := "Fully realized"
+				if realizedPercent < 99 {
+					realizedDisplay = fmt.Sprintf("%.2f%%", realizedPercent)
+				}
+
+				// Format the entry for unrealized leaderboard
+				leaderboardText.WriteString(fmt.Sprintf(
+					"%s %s\n**PnL:** %+.1f%% • **Realized:** %s %s\n\n",
+					rankEmoji,
+					displayName,
+					metrics.pnlPercent,
+					realizedDisplay,
+					statusEmoji,
+				))
+			}
 		}
 
 		// Add legend
@@ -328,8 +360,15 @@ func showPnlLeaderboard(database db.Database, s *discordgo.Session, m *discordgo
 		embed.Description = leaderboardText.String()
 	}
 
-	embed.Footer = &discordgo.MessageEmbedFooter{
-		Text: "💡 Tip: Unrealized gains don't count for prizes!",
+	// Different footer messages based on leaderboard type
+	if realized {
+		embed.Footer = &discordgo.MessageEmbedFooter{
+			Text: "🏆 Only realized gains count for prizes!",
+		}
+	} else {
+		embed.Footer = &discordgo.MessageEmbedFooter{
+			Text: "💡 Tip: Unrealized gains don't count for prizes!",
+		}
 	}
 
 	s.ChannelMessageSendEmbed(m.ChannelID, embed)
@@ -375,6 +414,13 @@ func calculatePnlMetrics(inUsd, outUsd, positionValue float32) pnlMetrics {
 		pnlPercent:        pnlPercent,
 		unrealizedPercent: unrealizedPercent,
 	}
+}
+
+func calculateRealizedPnl(inUsd, outUsd float32) float32 {
+	if inUsd > 0 {
+		return ((outUsd - inUsd) / inUsd) * 100
+	}
+	return 0
 }
 
 func formatPnlPercent(percent float32) string {
